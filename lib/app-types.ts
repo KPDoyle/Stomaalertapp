@@ -46,12 +46,47 @@ export type MessageData = {
   createdAt: string;
 };
 
+export type CareLogData = {
+  id: string;
+  outputMl: number;
+  consistency: "watery" | "loose" | "usual" | "firm";
+  hydrationMl: number;
+  skinStatus: "comfortable" | "itchy" | "sore" | "broken";
+  pain: number;
+  leak: boolean;
+  pouchChanged: boolean;
+  food: string;
+  symptoms: string;
+  createdAt: string;
+};
+
+export type InventoryItemData = {
+  id: string;
+  name: string;
+  productCode: string;
+  quantity: number;
+  reorderAt: number;
+  unit: string;
+};
+
+export type CareTaskData = {
+  id: string;
+  category: "routine" | "appointment" | "travel" | "recovery";
+  title: string;
+  detail: string;
+  dueDate: string;
+  completed: boolean;
+};
+
 export type AppData = {
   profile: ProfileData;
   checkins: CheckInData[];
   diaryEntries: DiaryEntryData[];
   supplyRequests: SupplyRequestData[];
   messages: MessageData[];
+  careLogs: CareLogData[];
+  inventory: InventoryItemData[];
+  careTasks: CareTaskData[];
 };
 
 export type AppAction =
@@ -60,4 +95,7 @@ export type AppAction =
   | { type: "request_supplies"; supplier: string }
   | { type: "toggle_guide"; index: number }
   | { type: "send_message"; body: string; sender: "patient" | "nurse" }
+  | { type: "save_care_log"; log: Omit<CareLogData, "id" | "createdAt"> }
+  | { type: "adjust_inventory"; id: string; change: number }
+  | { type: "toggle_care_task"; id: string }
   | { type: "update_content"; homeSubtitle: string; checkinHeading: string };

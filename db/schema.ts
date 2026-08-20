@@ -53,3 +53,38 @@ export const messages = sqliteTable("messages", {
   body: text("body").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+export const careLogs = sqliteTable("care_logs", {
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  outputMl: integer("output_ml").notNull(),
+  consistency: text("consistency").notNull(),
+  hydrationMl: integer("hydration_ml").notNull(),
+  skinStatus: text("skin_status").notNull(),
+  pain: integer("pain").notNull(),
+  leak: integer("leak", { mode: "boolean" }).notNull(),
+  pouchChanged: integer("pouch_changed", { mode: "boolean" }).notNull(),
+  food: text("food").notNull(),
+  symptoms: text("symptoms").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const inventoryItems = sqliteTable("inventory_items", {
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  name: text("name").notNull(),
+  productCode: text("product_code").notNull(),
+  quantity: integer("quantity").notNull(),
+  reorderAt: integer("reorder_at").notNull(),
+  unit: text("unit").notNull(),
+});
+
+export const careTasks = sqliteTable("care_tasks", {
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  detail: text("detail").notNull(),
+  dueDate: text("due_date").notNull(),
+  completed: integer("completed", { mode: "boolean" }).notNull(),
+});

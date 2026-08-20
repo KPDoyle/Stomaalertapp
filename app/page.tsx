@@ -20,13 +20,19 @@ import {
   Download,
   Droplets,
   FileText,
+  GlassWater,
+  HeartHandshake,
   HeartPulse,
   Home,
+  ListChecks,
   LineChart,
   Menu,
   MessageCircle,
   PackageOpen,
   PackageCheck,
+  Plane,
+  Plus,
+  Minus,
   Search,
   ScanLine,
   Settings2,
@@ -40,10 +46,11 @@ import {
 import { useEffect, useState } from "react";
 import type { AppAction, AppData, ProfileData } from "@/lib/app-types";
 
-type PatientView = "home" | "diary" | "progress" | "supplies" | "learn" | "profile";
+type PatientView = "home" | "care" | "diary" | "progress" | "supplies" | "learn" | "profile";
 
 const navItems = [
   { id: "home" as const, label: "Home", icon: Home },
+  { id: "care" as const, label: "Daily care", icon: HeartPulse },
   { id: "diary" as const, label: "Diary", icon: BookOpen },
   { id: "progress" as const, label: "Progress", icon: LineChart },
   { id: "supplies" as const, label: "Supplies", icon: Box },
@@ -64,9 +71,24 @@ const fallbackData: AppData = {
     { id: "demo-message-1", sender: "patient", body: "Morning Sarah. Everything feels comfortable today.", createdAt: "2026-08-19T09:18:00.000Z" },
     { id: "demo-message-2", sender: "nurse", body: "That is good to hear, Kevin. Keep an eye on the skin and let me know if anything changes.", createdAt: "2026-08-19T09:22:00.000Z" },
   ],
+  careLogs: [
+    { id:"demo-care-1", outputMl:650, consistency:"usual", hydrationMl:1800, skinStatus:"comfortable", pain:1, leak:false, pouchChanged:true, food:"Porridge, soup and a light evening meal", symptoms:"No new concerns", createdAt:"2026-08-20T10:12:00.000Z" },
+    { id:"demo-care-2", outputMl:720, consistency:"loose", hydrationMl:1600, skinStatus:"itchy", pain:2, leak:false, pouchChanged:false, food:"Toast, yoghurt and pasta", symptoms:"Mild itch at the lower edge", createdAt:"2026-08-18T10:12:00.000Z" },
+  ],
+  inventory: [
+    { id:"demo-pouches", name:"Drainable pouches · 60mm", productCode:"SA-DR60", quantity:8, reorderAt:10, unit:"pouches" },
+    { id:"demo-spray", name:"Barrier spray", productCode:"SA-BS50", quantity:2, reorderAt:1, unit:"bottles" },
+    { id:"demo-wipes", name:"Adhesive remover wipes", productCode:"SA-AR30", quantity:14, reorderAt:8, unit:"wipes" },
+  ],
+  careTasks: [
+    { id:"demo-task-1", category:"routine", title:"Review pouch-change routine", detail:"Check the seal, skin and wear time", dueDate:"2026-08-21", completed:false },
+    { id:"demo-task-2", category:"appointment", title:"Video review with Sarah", detail:"Bring your care summary and product questions", dueDate:"2026-08-26", completed:false },
+    { id:"demo-task-3", category:"travel", title:"Prepare an emergency change kit", detail:"Pouches, wipes, disposal bags and spare clothes", dueDate:"2026-09-01", completed:false },
+    { id:"demo-task-4", category:"recovery", title:"Gentle movement goal", detail:"A short walk if your care team has confirmed it is suitable", dueDate:"2026-08-22", completed:true },
+  ],
 };
 
-const localDataKey = "stoma-alert-device-demo-v1";
+const localDataKey = "stoma-alert-device-demo-v2";
 const localPhotoLimit = 1024 * 1024;
 
 function createId() {
@@ -130,7 +152,26 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
     return { ...current, messages: [...current.messages, { id: createId(), sender: action.sender, body, createdAt: now }] };
   }
 
-  return {
+  if (action.type === "save_care_log") {
+    const log = action.log;
+    if (log.outputMl < 0 || log.outputMl > 10000 || log.hydrationMl < 0 || log.hydrationMl > 10000 || log.pain < 0 || log.pain > 10) throw new Error("Check the amounts and pain score");
+    const detail = `${log.outputMl} ml output · ${log.consistency} · ${log.hydrationMl} ml fluids${log.leak ? " · leak reported" : ""}${log.pouchChanged ? " · pouch changed" : ""}`;
+    return {
+      ...current,
+      careLogs:[{ id:createId(), ...log, createdAt:now }, ...current.careLogs],
+      diaryEntries:[{ id:createId(), type:"note", title:"Daily care log", detail, fileKey:null, fileName:null, createdAt:now }, ...current.diaryEntries],
+    };
+  }
+
+  if (action.type === "adjust_inventory") {
+    return { ...current, inventory:current.inventory.map((item) => item.id === action.id ? { ...item, quantity:Math.max(0,item.quantity + action.change) } : item) };
+  }
+
+  if (action.type === "toggle_care_task") {
+    return { ...current, careTasks:current.careTasks.map((task) => task.id === action.id ? { ...task, completed:!task.completed } : task) };
+  }
+
+  if (action.type === "update_content") return {
     ...current,
     profile: {
       ...current.profile,
@@ -138,6 +179,8 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
       checkinHeading: action.checkinHeading.trim(),
     },
   };
+
+  return current;
 }
 
 function readFileAsDataUrl(file: File) {
@@ -297,9 +340,9 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
 
         <div className="mobile-section-title"><div><span>Your day</span><h2>What would you like to do?</h2></div><button onClick={() => onNavigate("progress")}>Progress <ArrowUpRight size={15}/></button></div>
         <section className="mobile-action-grid">
+          <button onClick={() => onNavigate("care")}><span><HeartPulse size={21}/></span><div><strong>Open daily care centre</strong><small>Output, hydration, skin and plan</small></div><ChevronRight size={18}/></button>
           <button onClick={() => onNavigate("diary")}><span><Camera size={21}/></span><div><strong>Add diary photo</strong><small>Keep a visual record</small></div><ChevronRight size={18}/></button>
           <button onClick={() => onNavigate("supplies")}><span><PackageCheck size={21}/></span><div><strong>Manage supplies</strong><small>About four days left</small></div><ChevronRight size={18}/></button>
-          <button onClick={() => onNavigate("learn")}><span><BookOpen size={21}/></span><div><strong>Learn & prepare</strong><small>Guidance for your stage</small></div><ChevronRight size={18}/></button>
           <button onClick={onMessage}><span><MessageCircle size={21}/></span><div><strong>Message your nurse</strong><small>Usually replies in one day</small></div><ChevronRight size={18}/></button>
         </section>
 
@@ -389,6 +432,7 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
         <article className="quick-card">
           <div className="bento-head"><div><span className="eyebrow">Do something</span><h3>Quick actions</h3></div></div>
           <div className="quick-list">
+            <button onClick={() => onNavigate("care")}><span><HeartPulse size={19}/></span><div><b>Open daily care centre</b><small>Output, hydration, skin and plan</small></div><ArrowUpRight size={17}/></button>
             <button onClick={() => onNavigate("diary")}><span><ScanLine size={19}/></span><div><b>Add a diary photo</b><small>Clear, guided image capture</small></div><ArrowUpRight size={17}/></button>
             <button onClick={() => onNavigate("supplies")}><span><PackageCheck size={19}/></span><div><b>Manage supplies</b><small>About four days remaining</small></div><ArrowUpRight size={17}/></button>
             <button onClick={() => onNavigate("learn")}><span><BookOpen size={19}/></span><div><b>Learn & feel prepared</b><small>Guidance for this stage</small></div><ArrowUpRight size={17}/></button>
@@ -402,6 +446,87 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
 
 function ViewHeading({ eyebrow, title, copy, action }: { eyebrow: string; title: string; copy: string; action?: React.ReactNode }) {
   return <header className="view-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{copy}</p></div>{action}</header>;
+}
+
+function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; onAction: (action: AppAction) => Promise<void>; onMessage: () => void; onNavigate: (view: PatientView) => void }) {
+  const [tab, setTab] = useState<"today" | "skin" | "plan" | "travel">("today");
+  const [draft, setDraft] = useState({ outputMl:650, consistency:"usual" as const, hydrationMl:1800, skinStatus:"comfortable" as const, pain:1, leak:false, pouchChanged:false, food:"", symptoms:"" });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const latest = data.careLogs[0];
+  const referenceAmount = data.profile.stomaType === "Ileostomy" ? 1500 : data.profile.stomaType === "Colostomy" ? 1000 : 2000;
+  const needsReview = Boolean(latest && (latest.skinStatus === "broken" || latest.skinStatus === "sore" || latest.pain >= 7 || latest.leak || (latest.consistency === "watery" && latest.outputMl >= referenceAmount)));
+  const completedTasks = data.careTasks.filter((task) => task.completed).length;
+  const travelTasks = data.careTasks.filter((task) => task.category === "travel");
+  const taskIcon = { routine:Clock3, appointment:CalendarDays, travel:Plane, recovery:Activity };
+  const setField = <K extends keyof typeof draft>(field: K, value: (typeof draft)[K]) => setDraft((current) => ({ ...current, [field]:value }));
+  const saveLog = async () => {
+    setSaving(true); setError(""); setSaved(false);
+    try { await onAction({ type:"save_care_log", log:draft }); setSaved(true); setDraft((current) => ({ ...current, pouchChanged:false, leak:false, food:"", symptoms:"" })); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Care log could not be saved"); }
+    finally { setSaving(false); }
+  };
+  const exportCareSummary = () => downloadFile("stoma-alert-care-summary.csv", `date,output_ml,consistency,hydration_ml,skin,pain,leak,pouch_changed,food,symptoms\n${data.careLogs.map((log) => [log.createdAt,log.outputMl,log.consistency,log.hydrationMl,log.skinStatus,log.pain,log.leak,log.pouchChanged,JSON.stringify(log.food),JSON.stringify(log.symptoms)].join(",")).join("\n")}`, "text/csv");
+  const downloadTravelCard = () => downloadFile("stoma-alert-travel-card.txt", `STOMA TRAVEL INFORMATION\n\nName: ${data.profile.firstName}\nStoma type: ${data.profile.stomaType}\nStoma care nurse: ${data.profile.nurse}\nSupplier: ${data.profile.supplier}\n\nThis person has a stoma and carries essential medical supplies. They may need privacy, additional time and access to toilet facilities.\n\nPrototype card — ask your clinician to verify details before travel.` , "text/plain");
+
+  return <section className="product-view care-centre">
+    <ViewHeading eyebrow="Daily care centre" title="Everything your stoma day needs" copy="Track the details that matter, prepare for what is next, and share one clear record with your care team." action={<button className="button button--quiet" onClick={exportCareSummary}><Download size={17}/> Export care summary</button>}/>
+    <div className="care-command-strip">
+      <article><span><Droplets size={20}/></span><div><small>Latest output</small><strong>{latest ? `${latest.outputMl} ml` : "Not logged"}</strong><p>{latest?.consistency || "Add today’s record"}</p></div></article>
+      <article><span><GlassWater size={20}/></span><div><small>Fluids logged</small><strong>{latest ? `${latest.hydrationMl} ml` : "Not logged"}</strong><p>Use your personal care plan</p></div></article>
+      <article><span><Sparkles size={20}/></span><div><small>Skin</small><strong>{latest ? latest.skinStatus : "Not checked"}</strong><p>Patient-reported</p></div></article>
+      <article><span><ListChecks size={20}/></span><div><small>Care plan</small><strong>{completedTasks}/{data.careTasks.length}</strong><p>Items complete</p></div></article>
+    </div>
+    {needsReview && <div className="care-review-banner" role="status"><AlertCircle size={21}/><div><strong>Your latest record may be useful to review</strong><p>This is not a diagnosis. If this is new, worsening or concerning, follow your care plan or contact your stoma care team.</p></div><button onClick={onMessage}>Message nurse</button></div>}
+    <nav className="care-tabs" aria-label="Daily care sections">{[["today","Today",HeartPulse],["skin","Skin check",Sparkles],["plan","Care plan",CalendarDays],["travel","Travel",Plane]].map(([id,label,Icon]) => <button key={String(id)} className={tab === id ? "is-active" : ""} onClick={() => setTab(id as typeof tab)}><Icon size={17}/>{String(label)}</button>)}</nav>
+
+    {tab === "today" && <div className="care-layout">
+      <article className="panel care-log-form">
+        <div className="panel-heading"><div><span className="eyebrow">Structured daily record</span><h2>Log output, fluids and pouch care</h2></div><span className="status-pill stable">Private</span></div>
+        <div className="care-form-grid">
+          <label>24-hour output amount <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.outputMl} onChange={(event) => setField("outputMl", Number(event.target.value))}/></label>
+          <label>Consistency<select value={draft.consistency} onChange={(event) => setField("consistency", event.target.value as typeof draft.consistency)}><option value="watery">Watery</option><option value="loose">Loose</option><option value="usual">Usual for me</option><option value="firm">Firm</option></select></label>
+          <label>Fluids taken <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.hydrationMl} onChange={(event) => setField("hydrationMl", Number(event.target.value))}/></label>
+          <label>Skin feels<select value={draft.skinStatus} onChange={(event) => setField("skinStatus", event.target.value as typeof draft.skinStatus)}><option value="comfortable">Comfortable</option><option value="itchy">Itchy</option><option value="sore">Sore</option><option value="broken">Broken or weeping</option></select></label>
+          <label className="pain-field">Pain or discomfort <span>{draft.pain}/10</span><input type="range" min="0" max="10" value={draft.pain} onChange={(event) => setField("pain", Number(event.target.value))}/></label>
+          <div className="care-toggles"><button className={draft.pouchChanged ? "is-selected" : ""} onClick={() => setField("pouchChanged",!draft.pouchChanged)}><CheckCircle2 size={18}/> Pouch changed</button><button className={draft.leak ? "is-alert" : ""} onClick={() => setField("leak",!draft.leak)}><Droplets size={18}/> Leak noticed</button></div>
+          <label className="span-two">Meals and drinks<textarea value={draft.food} onChange={(event) => setField("food",event.target.value)} placeholder="What did you eat and drink?" maxLength={500}/></label>
+          <label className="span-two">Symptoms or notes<textarea value={draft.symptoms} onChange={(event) => setField("symptoms",event.target.value)} placeholder="Gas, cramps, medication changes, activity or anything unusual" maxLength={500}/></label>
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {saved && <p className="form-success"><Check size={16}/> Daily care record saved and added to your diary.</p>}
+        <footer><p><ShieldCheck size={15}/> Tracking supports a care conversation; it does not replace clinical advice.</p><button className="button" disabled={saving} onClick={saveLog}>{saving ? "Saving…" : "Save today’s care log"}<ArrowRight size={17}/></button></footer>
+      </article>
+      <aside className="care-side-stack">
+        <article className="panel care-history"><div className="panel-heading"><div><span className="eyebrow">Recent record</span><h2>Your care timeline</h2></div></div>{data.careLogs.slice(0,4).map((log) => <div key={log.id}><span className={`care-history__dot ${log.leak || log.skinStatus === "sore" || log.skinStatus === "broken" ? "review" : ""}`}/><div><strong>{new Date(log.createdAt).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</strong><p>{log.outputMl} ml · {log.consistency} · {log.hydrationMl} ml fluids</p><small>{log.skinStatus} skin · pain {log.pain}/10{log.pouchChanged ? " · pouch changed" : ""}</small></div></div>)}</article>
+        <article className="care-reference"><AlertCircle size={20}/><div><strong>Know when to get help</strong><p>Use your individual care plan. Seek urgent clinical advice for severe cramps, vomiting, heavy bleeding, dehydration signs, or no stoma activity with concerning symptoms.</p><a href="https://www.nhs.uk/tests-and-treatments/ileostomy/complications/" target="_blank" rel="noreferrer">Read NHS guidance <ArrowUpRight size={14}/></a></div></article>
+      </aside>
+    </div>}
+
+    {tab === "skin" && <div className="skin-workspace">
+      <article className="panel guided-skin-card"><span className="guided-number">01</span><div><span className="eyebrow">Observe</span><h2>Look after removing the pouch</h2><p>Notice colour, moisture, soreness, itching, broken areas and whether the skin matches your usual appearance.</p></div></article>
+      <article className="panel guided-skin-card"><span className="guided-number">02</span><div><span className="eyebrow">Record</span><h2>Add a clear private photo</h2><p>Use similar lighting and distance so change over time is easier for you and your care team to review.</p><button onClick={() => onNavigate("diary")}>Open photo diary <Camera size={16}/></button></div></article>
+      <article className="panel guided-skin-card"><span className="guided-number">03</span><div><span className="eyebrow">Share</span><h2>Ask before it gets worse</h2><p>Persistent soreness, broken skin, repeated leaks or a suddenly poor fit are useful reasons to contact your stoma nurse.</p><button onClick={onMessage}>Message {data.profile.nurse.split(" ")[0]} <MessageCircle size={16}/></button></div></article>
+      <article className="skin-safety-note"><ShieldCheck size={23}/><div><strong>Guided self-observation, not automated diagnosis</strong><p>Stoma Alert does not classify images or prescribe treatment. A qualified clinician should assess concerns.</p></div></article>
+    </div>}
+
+    {tab === "plan" && <div className="plan-layout">
+      <article className="panel task-list"><div className="panel-heading"><div><span className="eyebrow">Routine, appointments and recovery</span><h2>Your shared care plan</h2></div><span>{completedTasks}/{data.careTasks.length} complete</span></div>{data.careTasks.map((task) => { const Icon = taskIcon[task.category]; return <button key={task.id} className={task.completed ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_care_task", id:task.id })}><i>{task.completed ? <Check size={16}/> : <Icon size={17}/>}</i><span><strong>{task.title}</strong><p>{task.detail}</p><small>{task.category} · {new Date(task.dueDate).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></span><ChevronRight size={17}/></button>})}</article>
+      <aside className="plan-side">
+        <article className="next-appointment"><span><CalendarDays size={22}/></span><small>Next care review</small><h3>26 August · 10:30</h3><p>Video appointment with {data.profile.nurse}</p><button onClick={onMessage}>Send a question first <ArrowRight size={15}/></button></article>
+        <article className="panel recovery-path"><span className="eyebrow">Recovery pathway</span><h2>Move with confidence</h2>{["Reconnect with breathing","Gentle everyday movement","Build strength gradually"].map((item,index) => <div key={item}><i>{index + 1}</i><span><strong>{item}</strong><small>{index === 0 ? "Current phase" : "Unlock with your care plan"}</small></span></div>)}<p><HeartHandshake size={16}/> Confirm movement and lifting advice with your own clinical team.</p></article>
+      </aside>
+    </div>}
+
+    {tab === "travel" && <div className="travel-layout">
+      <article className="travel-hero"><span><Plane size={27}/></span><div><span className="eyebrow">Travel mode</span><h2>Prepared, discreet and confident</h2><p>Build an emergency kit, keep key details together and plan enough supplies for disruption.</p></div><button className="button" onClick={downloadTravelCard}><Download size={17}/> Download travel card</button></article>
+      <div className="travel-columns">
+        <article className="panel travel-checklist"><div className="panel-heading"><div><span className="eyebrow">Before you leave</span><h2>Travel checklist</h2></div></div>{travelTasks.map((task) => <button key={task.id} className={task.completed ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_care_task", id:task.id })}><i>{task.completed && <Check size={15}/>}</i><span><strong>{task.title}</strong><small>{task.detail}</small></span></button>)}{["Carry supplies in hand luggage","Pack disposal bags and spare clothes","Save prescriptions and nurse details"].map((item,index) => <div key={item}><i>{index + 1}</i><span>{item}</span></div>)}</article>
+        <article className="panel travel-support"><span className="eyebrow">Trusted resources</span><h2>Know before you go</h2><p>Colostomy UK offers a CAA-endorsed travel certificate, a travel checklist and practical guidance for airport security.</p><a href="https://www.colostomyuk.org/information/travel-advice/" target="_blank" rel="noreferrer">Open official travel advice <ArrowUpRight size={15}/></a><div><ShieldCheck size={18}/><span><strong>Prototype travel card</strong><small>Ask your care team to verify it before relying on it.</small></span></div></article>
+      </div>
+    </div>}
+  </section>;
 }
 
 function DiaryView({ data, onCheckIn, onUpload }: { data: AppData; onCheckIn: () => void; onUpload: (file: File) => Promise<void> }) {
@@ -479,7 +604,7 @@ function SuppliesView({ data, onAction }: { data: AppData; onAction: (action: Ap
     {showHistory && <article className="panel request-history"><div className="panel-heading"><div><span className="eyebrow">Saved requests</span><h2>Reorder history</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item) => <div key={item.id}><span><strong>{item.product}</strong><small>{new Date(item.createdAt).toLocaleString("en-GB")}</small></span><b>{item.supplier}</b><i className="status-pill review">{item.status}</i></div>) : <p>No requests yet. Your next reorder will appear here.</p>}</article>}
     <div className="supplies-layout">
       <div>
-        <article className="panel product-card"><div className="product-image"><Box size={44} /></div><div className="product-copy"><span className="eyebrow">Your current appliance</span><h2>Drainable pouch · 60mm</h2><p>Product code SA-DR60 · Last delivery 6 August</p><div className="stock-row"><span><i /> Low stock</span><b>About 4 days remaining</b></div><div className="stock-track"><i /></div></div></article>
+        <article className="panel inventory-card"><div className="panel-heading"><div><span className="eyebrow">Live inventory</span><h2>Products at home</h2></div><Box size={20}/></div><p>Adjust quantities as you use or receive products. Low-stock items are highlighted automatically.</p><div className="inventory-list">{data.inventory.map((item) => { const low = item.quantity <= item.reorderAt; return <div key={item.id} className={low ? "is-low" : ""}><span className="inventory-icon"><PackageCheck size={19}/></span><span><strong>{item.name}</strong><small>{item.productCode} · reorder at {item.reorderAt}</small></span><i className={`status-pill ${low ? "review" : "stable"}`}>{low ? "Low stock" : "In stock"}</i><div className="stepper-control"><button aria-label={`Remove one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:-1 })}><Minus size={14}/></button><b>{item.quantity}</b><button aria-label={`Add one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:1 })}><Plus size={14}/></button></div></div>})}</div></article>
         <article className="panel request-card"><div><span className="eyebrow">Quick reorder</span><h2>Ready for your next box?</h2><p>Your request goes to {supplier}. They’ll confirm quantities and delivery.</p></div><button className="button" onClick={async () => { setRequesting(true); setError(""); try { await onAction({ type:"request_supplies", supplier }); setRequested(true); } catch (caught) { setError(caught instanceof Error ? caught.message : "Request could not be sent"); } finally { setRequesting(false); } }} disabled={requested || requesting}>{requesting ? "Sending…" : requested ? "Request sent" : "Request supplies"} <ArrowRight size={17} /></button></article>
       </div>
       <aside className="panel supplier-card"><span className="eyebrow">Delivery partner</span><h2>Your supplier</h2><p>Choose who receives this demo reorder request.</p><label htmlFor="supplier">Selected supplier</label><div className="select-wrap"><select id="supplier" value={supplier} onChange={(event) => { setSupplier(event.target.value); setRequested(false); }}>{["Fittleworth","Coloplast Charter","SecuriCare","Amcare","Bullen","Respond","Salts Healthcare"].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={17}/></div><div className="supplier-help"><MessageCircle size={18}/><div><strong>Having a product problem?</strong><p>Message your care team for fitting support.</p></div><ChevronRight size={17}/></div></aside>
@@ -535,6 +660,9 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
   const [contentDraft, setContentDraft] = useState({ homeSubtitle:data.profile.homeSubtitle, checkinHeading:data.profile.checkinHeading });
   const [contentSaved, setContentSaved] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
+  const latestCare = data.careLogs[0];
+  const careNeedsReview = Boolean(latestCare && (latestCare.leak || latestCare.skinStatus === "sore" || latestCare.skinStatus === "broken" || latestCare.pain >= 7));
+  const lowStockItems = data.inventory.filter((item) => item.quantity <= item.reorderAt).length;
   const adminContentCards = [
     { title:"App copy", copy:"Home prompts, check-in language and guidance", icon:FileText },
     { title:"Learning articles", copy:"Patient guides and education pathways", icon:BookOpen },
@@ -542,6 +670,7 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
     { title:"Safety content", copy:"Escalation wording and support contacts", icon:ShieldCheck },
   ];
   const patients = [
+    { name:`${data.profile.firstName} Doyle`, initials:`${data.profile.firstName.slice(0,1)}D`, status:careNeedsReview?"Review":"Connected", tone:careNeedsReview?"review":"stable", score:latestCare ? `${latestCare.outputMl} ml · ${latestCare.skinStatus} skin` : "Awaiting detailed log", when:"Now", last:"Today" },
     { name:"Margaret Lewis", initials:"ML", status:"Review", tone:"review", score:"2 areas easing", when:"09:24", last:"Today" },
     { name:"Peter Walsh", initials:"PW", status:"Stable", tone:"stable", score:"All areas steady", when:"08:51", last:"Today" },
     { name:"Amira Khan", initials:"AK", status:"New photo", tone:"photo", score:"Photo ready to review", when:"Yesterday", last:"Yesterday" },
@@ -552,9 +681,9 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
   const saveContent = async () => { await onAction({ type:"update_content", ...contentDraft }); setContentSaved(true); setTimeout(() => setContentSaved(false), 1800); };
   if (view === "content") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Patient-facing content" copy="Manage the information, learning and product support patients see." action={<button className="button" onClick={saveContent}>{contentSaved ? "Published" : "Publish updates"} <Check size={17}/></button>}/><div className="content-admin-grid">{adminContentCards.map(({title,copy,icon:Icon}) => <button className="admin-content-card" key={title}><span><Icon size={23}/></span><div><strong>{title}</strong><p>{copy}</p></div><ChevronRight size={18}/></button>)}</div><article className="panel editor-preview"><div><span className="eyebrow">Live app copy</span><h2>Home and check-in</h2><label>Home check-in subtitle<textarea value={contentDraft.homeSubtitle} onChange={(event) => setContentDraft((current) => ({...current,homeSubtitle:event.target.value}))}/></label><label>Check-in heading<input value={contentDraft.checkinHeading} onChange={(event) => setContentDraft((current) => ({...current,checkinHeading:event.target.value}))}/></label><button className="button" onClick={saveContent}>{contentSaved ? "Saved" : "Save section"}</button></div><div className="phone-preview"><span className="eyebrow">Patient preview</span><h3>Good evening, {data.profile.firstName}</h3><div><strong>{contentDraft.checkinHeading}</strong><p>{contentDraft.homeSubtitle}</p><button>Start today’s check-in</button></div></div></article></section>;
   if (view === "supplies") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Supplies overview" copy="Reorder demand across patients, suppliers and products." action={<button className="button button--quiet" onClick={() => downloadFile("supply-requests.csv", `supplier,product,status,date\n${data.supplyRequests.map((item) => `${item.supplier},${item.product},${item.status},${item.createdAt}`).join("\n")}`, "text/csv")}><Download size={17}/> Export</button>}/><div className="staff-stats"><article><PackageOpen size={20}/><div><strong>{data.supplyRequests.length}</strong><small>Open requests</small></div>{data.supplyRequests.length > 0 && <span className="status-pill review">Needs action</span>}</article><article><CheckCircle2 size={20}/><div><strong>42</strong><small>Completed this month</small></div></article><article><Clock3 size={20}/><div><strong>1.4 days</strong><small>Average fulfilment</small></div></article></div><article className="panel supplier-table"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Latest requests</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item,index) => <div className="supplier-row" key={item.id}><strong>{item.supplier}</strong><div className="bar"><i style={{width:`${Math.max(18,100-index*16)}%`}}/></div><b>1</b><span>{item.status}</span></div>) : <p>No requests have been submitted yet.</p>}</article></section>;
-  if (view === "reports") return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Reports & audit" copy="Caseload activity for monitoring, handover and record-keeping—not diagnosis." action={<button className="button" onClick={() => downloadFile("checkin-report.csv", `date,output,skin,comfort,mood\n${data.checkins.map((item) => `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood}`).join("\n")}`, "text/csv")}><Download size={17}/> Export CSV</button>}/><div className="staff-stats"><article><ClipboardCheck size={20}/><div><strong>{data.checkins.length}</strong><small>Recorded check-ins</small></div></article><article><UsersRound size={20}/><div><strong>31</strong><small>Demo caseload</small></div></article><article><AlertCircle size={20}/><div><strong>{data.checkins[0] && Math.min(data.checkins[0].skin,data.checkins[0].comfort) <= 2 ? 1 : 0}</strong><small>Flagged for review</small></div><span className="status-pill review">Review</span></article></div><div className="reports-grid"><article className="panel report-bars"><div className="panel-heading"><div><span className="eyebrow">Recent check-ins</span><h2>Wellbeing activity</h2></div></div>{data.checkins.slice(0,7).reverse().map((item,index) => <span key={item.id}><i style={{height:`${wellbeing([item])}%`}}/><small>{new Date(item.createdAt).toLocaleDateString("en-GB",{weekday:"narrow"}) || index}</small></span>)}</article><article className="panel audit-list"><div className="panel-heading"><div><span className="eyebrow">Patient status</span><h2>At a glance</h2></div></div>{[["Latest wellbeing",wellbeing(data.checkins),"stable"],["Diary entries",data.diaryEntries.length,"review"],["Messages",data.messages.length,"missing"]].map(([label,count,tone]) => <div key={String(label)}><span className={`status-dot ${tone}`}/><strong>{label}</strong><b>{count}</b></div>)}</article></div></section>;
+  if (view === "reports") return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Reports & audit" copy="Caseload activity for monitoring, handover and record-keeping—not diagnosis." action={<button className="button" onClick={() => downloadFile("care-team-report.csv", `date,wellbeing_output,skin,comfort,mood,detailed_output_ml,consistency,hydration_ml,skin_observation,pain,leak\n${data.checkins.map((item,index) => { const care=data.careLogs[index]; return `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood},${care?.outputMl||""},${care?.consistency||""},${care?.hydrationMl||""},${care?.skinStatus||""},${care?.pain||""},${care?.leak||false}` }).join("\n")}`, "text/csv")}><Download size={17}/> Export care record</button>}/><div className="staff-stats"><article><ClipboardCheck size={20}/><div><strong>{data.checkins.length}</strong><small>Wellbeing check-ins</small></div></article><article><Droplets size={20}/><div><strong>{data.careLogs.length}</strong><small>Detailed care logs</small></div></article><article><AlertCircle size={20}/><div><strong>{careNeedsReview ? 1 : 0}</strong><small>Patient-reported review signals</small></div>{careNeedsReview && <span className="status-pill review">Review</span>}</article><article><PackageOpen size={20}/><div><strong>{lowStockItems}</strong><small>Low-stock products</small></div></article></div><div className="reports-grid"><article className="panel report-bars"><div className="panel-heading"><div><span className="eyebrow">Recent check-ins</span><h2>Wellbeing activity</h2></div></div>{data.checkins.slice(0,7).reverse().map((item,index) => <span key={item.id}><i style={{height:`${wellbeing([item])}%`}}/><small>{new Date(item.createdAt).toLocaleDateString("en-GB",{weekday:"narrow"}) || index}</small></span>)}</article><article className="panel audit-list"><div className="panel-heading"><div><span className="eyebrow">Patient status</span><h2>At a glance</h2></div></div>{[["Latest wellbeing",wellbeing(data.checkins),"stable"],["Detailed care logs",data.careLogs.length,careNeedsReview?"review":"stable"],["Diary entries",data.diaryEntries.length,"photo"],["Messages",data.messages.length,"missing"]].map(([label,count,tone]) => <div key={String(label)}><span className={`status-dot ${tone}`}/><strong>{label}</strong><b>{count}</b></div>)}</article></div></section>;
   if (view === "messages") return <section className="product-view staff-view"><ViewHeading eyebrow="Care team" title="Patient conversations" copy="Secure messages between patients and their stoma care team."/><div className="messages-layout"><article className="panel thread-list"><label className="search-box"><Search size={17}/><input placeholder="Search conversations…"/></label><button className="is-active"><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><span><strong>{data.profile.firstName} Doyle</strong><small>{data.messages.at(-1)?.body || "No messages yet"}</small></span><b>Now</b></button>{patients.slice(0,3).map((patient) => <button key={patient.name}><span className="patient-avatar">{patient.initials}</span><span><strong>{patient.name}</strong><small>Demo conversation</small></span><b>{patient.when}</b></button>)}</article><article className="panel conversation"><header><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><div><strong>{data.profile.firstName} Doyle</strong><small><i/> Demo workspace</small></div><span className="status-pill stable">Connected</span></header><div className="messages">{data.messages.map((message) => <div className={`message ${message.sender}`} key={message.id}><p>{message.body}</p><span>{new Date(message.createdAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span></div>)}</div><div className="composer"><input value={messageBody} onChange={(event) => setMessageBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && messageBody.trim()) event.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent("click",{bubbles:true})); }} placeholder={`Reply to ${data.profile.firstName}…`}/><button disabled={sending || !messageBody.trim()} onClick={async () => { setSending(true); try { await onAction({type:"send_message",body:messageBody,sender:"nurse"}); setMessageBody(""); } finally { setSending(false); } }} aria-label="Send message"><ArrowRight size={19}/></button></div></article></div></section>;
-  return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Today’s caseload" copy="Patient-reported information for review and follow-up—not diagnosis."/><div className="staff-stats"><article><UsersRound size={20}/><div><strong>31</strong><small>Patients</small></div></article><article><AlertCircle size={20}/><div><strong>4</strong><small>Need review</small></div><span className="status-pill review">Review</span></article><article><ClipboardCheck size={20}/><div><strong>{data.checkins.length}</strong><small>Demo patient check-ins</small></div></article><article><Camera size={20}/><div><strong>{data.diaryEntries.filter((entry) => entry.type === "photo").length}</strong><small>New photos</small></div></article></div><article className="panel caseload-panel"><div className="caseload-tools"><label className="search-box"><Search size={17}/><input value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="Search by patient name…"/></label><button><CalendarDays size={17}/> Today <ChevronDown size={16}/></button></div><div className="patient-table"><div className="table-head"><span>Patient</span><span>Status</span><span>Latest signal</span><span>Last check-in</span><span/></div>{visiblePatients.map(patient => <button className="patient-row" key={patient.name}><span className="patient-name"><i className="patient-avatar">{patient.initials}</i><span><strong>{patient.name}</strong><small>Patient since Mar 2026</small></span></span><span><i className={`status-pill ${patient.tone}`}>{patient.status}</i></span><span>{patient.score}</span><span>{patient.last}</span><ChevronRight size={18}/></button>)}</div></article></section>;
+  return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Today’s caseload" copy="Patient-reported information for review and follow-up—not diagnosis."/><div className="staff-stats"><article><UsersRound size={20}/><div><strong>31</strong><small>Patients</small></div></article><article><AlertCircle size={20}/><div><strong>{3 + Number(careNeedsReview)}</strong><small>Need review</small></div><span className="status-pill review">Review</span></article><article><ClipboardCheck size={20}/><div><strong>{data.careLogs.length}</strong><small>Detailed care logs</small></div></article><article><PackageOpen size={20}/><div><strong>{lowStockItems}</strong><small>Supply alerts</small></div></article></div><article className="panel caseload-panel"><div className="caseload-tools"><label className="search-box"><Search size={17}/><input value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="Search by patient name…"/></label><button><CalendarDays size={17}/> Today <ChevronDown size={16}/></button></div><div className="patient-table"><div className="table-head"><span>Patient</span><span>Status</span><span>Latest signal</span><span>Last check-in</span><span/></div>{visiblePatients.map(patient => <button className="patient-row" key={patient.name}><span className="patient-name"><i className="patient-avatar">{patient.initials}</i><span><strong>{patient.name}</strong><small>Patient since Mar 2026</small></span></span><span><i className={`status-pill ${patient.tone}`}>{patient.status}</i></span><span>{patient.score}</span><span>{patient.last}</span><ChevronRight size={18}/></button>)}</div></article></section>;
 }
 
 export default function StomaAlertApp() {
@@ -619,7 +748,7 @@ export default function StomaAlertApp() {
     {id:"caseload" as const,label:"Patients",icon:UsersRound}, {id:"messages" as const,label:"Messages",icon:MessageCircle},
     {id:"reports" as const,label:"Reports",icon:FileText}, ...(role === "Administrator" ? [{id:"supplies" as const,label:"Supplies",icon:PackageOpen},{id:"content" as const,label:"Content",icon:Settings2}] : []),
   ];
-  const patientContent = view === "home" ? <PatientHome data={data} syncState={syncState} onCheckIn={() => setCheckInOpen(true)} onMessage={() => setMessageOpen(true)} onNavigate={setView} /> : view === "diary" ? <DiaryView data={data} onCheckIn={() => setCheckInOpen(true)} onUpload={uploadPhoto} /> : view === "progress" ? <ProgressView data={data} /> : view === "supplies" ? <SuppliesView data={data} onAction={performAction} /> : view === "learn" ? <LearnView data={data} onAction={performAction} /> : <ProfileView data={data} onAction={performAction} />;
+  const patientContent = view === "home" ? <PatientHome data={data} syncState={syncState} onCheckIn={() => setCheckInOpen(true)} onMessage={() => setMessageOpen(true)} onNavigate={setView} /> : view === "care" ? <CareView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} onNavigate={setView}/> : view === "diary" ? <DiaryView data={data} onCheckIn={() => setCheckInOpen(true)} onUpload={uploadPhoto} /> : view === "progress" ? <ProgressView data={data} /> : view === "supplies" ? <SuppliesView data={data} onAction={performAction} /> : view === "learn" ? <LearnView data={data} onAction={performAction} /> : <ProfileView data={data} onAction={performAction} />;
 
   return (
     <div className="site-shell">
@@ -643,10 +772,10 @@ export default function StomaAlertApp() {
       <main className="app-content">{role === "Patient" ? patientContent : <StaffDashboard role={role} view={staffView} data={data} onAction={performAction}/>}</main>
       {role === "Patient" && <nav className="mobile-nav" aria-label="Quick navigation">
         <button className={view==="home"?"is-active":""} onClick={() => setView("home")}><Home size={21}/><span>Home</span></button>
-        <button className={view==="diary"?"is-active":""} onClick={() => setView("diary")}><BookOpen size={21}/><span>Diary</span></button>
+        <button className={view==="care"?"is-active":""} onClick={() => setView("care")}><HeartPulse size={21}/><span>Daily care</span></button>
         <button className="mobile-nav__checkin" onClick={() => setCheckInOpen(true)} aria-label="Start today’s check-in"><i><ClipboardCheck size={23}/></i><span>Check in</span></button>
-        <button className={view==="progress"?"is-active":""} onClick={() => setView("progress")}><LineChart size={21}/><span>Progress</span></button>
-        <button className={!["home","diary","progress"].includes(view)?"is-active":""} onClick={() => setMenuOpen(true)}><Menu size={21}/><span>More</span></button>
+        <button className={view==="diary"?"is-active":""} onClick={() => setView("diary")}><BookOpen size={21}/><span>Diary</span></button>
+        <button className={!["home","care","diary"].includes(view)?"is-active":""} onClick={() => setMenuOpen(true)}><Menu size={21}/><span>More</span></button>
       </nav>}
       {checkInOpen && <CheckInPanel heading={data.profile.checkinHeading} onSave={(scores) => performAction({ type:"save_checkin", scores })} onClose={() => setCheckInOpen(false)}/>} 
       {messageOpen && <PatientMessagePanel data={data} onAction={performAction} onClose={() => setMessageOpen(false)}/>} 
