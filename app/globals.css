@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
 
 :root {
   --ink: #071a33; --ink-2: #334a68; --muted: #6b7f9c; --teal: #2563eb; --teal-deep: #1749b7;

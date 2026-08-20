@@ -66,6 +66,89 @@ const fallbackData: AppData = {
   ],
 };
 
+const localDataKey = "stoma-alert-device-demo-v1";
+const localPhotoLimit = 1024 * 1024;
+
+function createId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function readLocalData() {
+  try {
+    const value = localStorage.getItem(localDataKey);
+    return value ? JSON.parse(value) as AppData : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalData(data: AppData) {
+  localStorage.setItem(localDataKey, JSON.stringify(data));
+}
+
+function applyLocalAction(current: AppData, action: AppAction): AppData {
+  const now = new Date().toISOString();
+
+  if (action.type === "save_checkin") {
+    const scores = action.scores.map(Number);
+    if (scores.length !== 4 || scores.some((score) => !Number.isInteger(score) || score < 1 || score > 5)) {
+      throw new Error("Complete all four check-in questions");
+    }
+    return {
+      ...current,
+      checkins: [{ id: createId(), output: scores[0], skin: scores[1], comfort: scores[2], mood: scores[3], createdAt: now }, ...current.checkins],
+      diaryEntries: [{ id: createId(), type: "checkin", title: "Daily check-in", detail: `Output ${scores[0]} · Skin ${scores[1]} · Comfort ${scores[2]} · Mood ${scores[3]}`, fileKey: null, fileName: null, createdAt: now }, ...current.diaryEntries],
+    };
+  }
+
+  if (action.type === "update_profile") {
+    return { ...current, profile: { ...current.profile, ...action.profile } };
+  }
+
+  if (action.type === "request_supplies") {
+    const supplier = action.supplier.trim();
+    if (!supplier) throw new Error("Choose a supplier");
+    return {
+      ...current,
+      profile: { ...current.profile, supplier },
+      supplyRequests: [{ id: createId(), supplier, product: "Drainable pouch · 60mm", status: "Requested", createdAt: now }, ...current.supplyRequests],
+    };
+  }
+
+  if (action.type === "toggle_guide") {
+    if (action.index < 0 || action.index > 2) throw new Error("Guide not found");
+    const learning = [...current.profile.learning];
+    learning[action.index] = !learning[action.index];
+    return { ...current, profile: { ...current.profile, learning } };
+  }
+
+  if (action.type === "send_message") {
+    const body = action.body.trim();
+    if (!body || body.length > 1000) throw new Error("Enter a message up to 1,000 characters");
+    return { ...current, messages: [...current.messages, { id: createId(), sender: action.sender, body, createdAt: now }] };
+  }
+
+  return {
+    ...current,
+    profile: {
+      ...current.profile,
+      homeSubtitle: action.homeSubtitle.trim(),
+      checkinHeading: action.checkinHeading.trim(),
+    },
+  };
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Photo could not be read"));
+    reader.onerror = () => reject(new Error("Photo could not be read"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function wellbeing(checkins: AppData["checkins"]) {
   if (!checkins.length) return 0;
   const latest = checkins[0];
@@ -296,7 +379,7 @@ function DiaryView({ data, onCheckIn, onUpload }: { data: AppData; onCheckIn: ()
       <div><span className="mini-stat__icon peach"><TrendingUp size={19} /></span><strong>{Math.min(7, data.checkins.length)} days</strong><small>Recent rhythm</small></div>
     </div>
     <article className="panel diary-upload">
-      <div><span className="diary-upload__icon"><Camera size={22}/></span><div><strong>Add a private diary photo</strong><p>JPG, PNG or HEIC up to 8 MB. Stored in the app’s protected file space.</p></div></div>
+      <div><span className="diary-upload__icon"><Camera size={22}/></span><div><strong>Add a private diary photo</strong><p>JPG, PNG or HEIC up to 8 MB. Photos use protected storage when available, with an on-device prototype fallback.</p></div></div>
       <label className="file-picker"><input type="file" accept="image/*" onChange={(event) => { setFile(event.target.files?.[0] || null); setError(""); }}/><span>{file ? file.name : "Choose photo"}</span></label>
       <button className="button" disabled={!file || uploading} onClick={async () => { if (!file) return; setUploading(true); setError(""); try { await onUpload(file); setFile(null); } catch (caught) { setError(caught instanceof Error ? caught.message : "Upload failed"); } finally { setUploading(false); } }}>{uploading ? "Uploading…" : "Upload photo"} <ArrowUpRight size={16}/></button>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -310,7 +393,7 @@ function DiaryView({ data, onCheckIn, onUpload }: { data: AppData; onCheckIn: ()
       </article>
       <article className="panel timeline-panel">
         <div className="panel-heading timeline-heading"><div><span className="eyebrow">Recent activity</span><h2>Your timeline</h2></div><div className="filter-pills">{(["all","checkin","photo"] as const).map(item => <button key={item} className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All" : item === "checkin" ? "Check-ins" : "Photos"}</button>)}</div></div>
-        <div className="timeline-list">{entries.filter(entry => filter === "all" || entry.type === filter).map((entry) => { const stamp = formatEntryDate(entry.createdAt); return <div className="timeline-entry" key={entry.id}><span className={`timeline-icon ${entry.type === "photo" ? "photo" : "good"}`}>{entry.type === "photo" ? <Camera size={18} /> : <ClipboardCheck size={18} />}</span><div><span>{stamp.day} · {stamp.time}</span><strong>{entry.title}</strong><p>{entry.detail}</p>{entry.fileKey && <a className="photo-link" href={`/api/files?key=${encodeURIComponent(entry.fileKey)}`} target="_blank" rel="noreferrer">View private photo <ArrowUpRight size={13}/></a>}</div><ChevronRight size={18} /></div>; })}</div>
+        <div className="timeline-list">{entries.filter(entry => filter === "all" || entry.type === filter).map((entry) => { const stamp = formatEntryDate(entry.createdAt); const photoHref = entry.fileKey?.startsWith("data:") ? entry.fileKey : entry.fileKey ? `/api/files?key=${encodeURIComponent(entry.fileKey)}` : null; return <div className="timeline-entry" key={entry.id}><span className={`timeline-icon ${entry.type === "photo" ? "photo" : "good"}`}>{entry.type === "photo" ? <Camera size={18} /> : <ClipboardCheck size={18} />}</span><div><span>{stamp.day} · {stamp.time}</span><strong>{entry.title}</strong><p>{entry.detail}</p>{photoHref && <a className="photo-link" href={photoHref} target="_blank" rel="noreferrer">View private photo <ArrowUpRight size={13}/></a>}</div><ChevronRight size={18} /></div>; })}</div>
       </article>
     </div>
   </section>;
@@ -410,6 +493,12 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
   const [contentDraft, setContentDraft] = useState({ homeSubtitle:data.profile.homeSubtitle, checkinHeading:data.profile.checkinHeading });
   const [contentSaved, setContentSaved] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
+  const adminContentCards = [
+    { title:"App copy", copy:"Home prompts, check-in language and guidance", icon:FileText },
+    { title:"Learning articles", copy:"Patient guides and education pathways", icon:BookOpen },
+    { title:"Product helper", copy:"FAQs, suppliers and product guidance", icon:PackageOpen },
+    { title:"Safety content", copy:"Escalation wording and support contacts", icon:ShieldCheck },
+  ];
   const patients = [
     { name:"Margaret Lewis", initials:"ML", status:"Review", tone:"review", score:"2 areas easing", when:"09:24", last:"Today" },
     { name:"Peter Walsh", initials:"PW", status:"Stable", tone:"stable", score:"All areas steady", when:"08:51", last:"Today" },
@@ -419,7 +508,7 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
   ];
   const visiblePatients = patients.filter((patient) => patient.name.toLowerCase().includes(patientSearch.toLowerCase()));
   const saveContent = async () => { await onAction({ type:"update_content", ...contentDraft }); setContentSaved(true); setTimeout(() => setContentSaved(false), 1800); };
-  if (view === "content") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Patient-facing content" copy="Manage the information, learning and product support patients see." action={<button className="button" onClick={saveContent}>{contentSaved ? "Published" : "Publish updates"} <Check size={17}/></button>}/><div className="content-admin-grid">{[["App copy","Home prompts, check-in language and guidance",FileText],["Learning articles","Patient guides and education pathways",BookOpen],["Product helper","FAQs, suppliers and product guidance",PackageOpen],["Safety content","Escalation wording and support contacts",ShieldCheck]].map(([title,copy,Icon]) => <button className="admin-content-card" key={String(title)}><span><Icon size={23}/></span><div><strong>{title}</strong><p>{copy}</p></div><ChevronRight size={18}/></button>)}</div><article className="panel editor-preview"><div><span className="eyebrow">Live app copy</span><h2>Home and check-in</h2><label>Home check-in subtitle<textarea value={contentDraft.homeSubtitle} onChange={(event) => setContentDraft((current) => ({...current,homeSubtitle:event.target.value}))}/></label><label>Check-in heading<input value={contentDraft.checkinHeading} onChange={(event) => setContentDraft((current) => ({...current,checkinHeading:event.target.value}))}/></label><button className="button" onClick={saveContent}>{contentSaved ? "Saved" : "Save section"}</button></div><div className="phone-preview"><span className="eyebrow">Patient preview</span><h3>Good evening, {data.profile.firstName}</h3><div><strong>{contentDraft.checkinHeading}</strong><p>{contentDraft.homeSubtitle}</p><button>Start today’s check-in</button></div></div></article></section>;
+  if (view === "content") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Patient-facing content" copy="Manage the information, learning and product support patients see." action={<button className="button" onClick={saveContent}>{contentSaved ? "Published" : "Publish updates"} <Check size={17}/></button>}/><div className="content-admin-grid">{adminContentCards.map(({title,copy,icon:Icon}) => <button className="admin-content-card" key={title}><span><Icon size={23}/></span><div><strong>{title}</strong><p>{copy}</p></div><ChevronRight size={18}/></button>)}</div><article className="panel editor-preview"><div><span className="eyebrow">Live app copy</span><h2>Home and check-in</h2><label>Home check-in subtitle<textarea value={contentDraft.homeSubtitle} onChange={(event) => setContentDraft((current) => ({...current,homeSubtitle:event.target.value}))}/></label><label>Check-in heading<input value={contentDraft.checkinHeading} onChange={(event) => setContentDraft((current) => ({...current,checkinHeading:event.target.value}))}/></label><button className="button" onClick={saveContent}>{contentSaved ? "Saved" : "Save section"}</button></div><div className="phone-preview"><span className="eyebrow">Patient preview</span><h3>Good evening, {data.profile.firstName}</h3><div><strong>{contentDraft.checkinHeading}</strong><p>{contentDraft.homeSubtitle}</p><button>Start today’s check-in</button></div></div></article></section>;
   if (view === "supplies") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Supplies overview" copy="Reorder demand across patients, suppliers and products." action={<button className="button button--quiet" onClick={() => downloadFile("supply-requests.csv", `supplier,product,status,date\n${data.supplyRequests.map((item) => `${item.supplier},${item.product},${item.status},${item.createdAt}`).join("\n")}`, "text/csv")}><Download size={17}/> Export</button>}/><div className="staff-stats"><article><PackageOpen size={20}/><div><strong>{data.supplyRequests.length}</strong><small>Open requests</small></div>{data.supplyRequests.length > 0 && <span className="status-pill review">Needs action</span>}</article><article><CheckCircle2 size={20}/><div><strong>42</strong><small>Completed this month</small></div></article><article><Clock3 size={20}/><div><strong>1.4 days</strong><small>Average fulfilment</small></div></article></div><article className="panel supplier-table"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Latest requests</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item,index) => <div className="supplier-row" key={item.id}><strong>{item.supplier}</strong><div className="bar"><i style={{width:`${Math.max(18,100-index*16)}%`}}/></div><b>1</b><span>{item.status}</span></div>) : <p>No requests have been submitted yet.</p>}</article></section>;
   if (view === "reports") return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Reports & audit" copy="Caseload activity for monitoring, handover and record-keeping—not diagnosis." action={<button className="button" onClick={() => downloadFile("checkin-report.csv", `date,output,skin,comfort,mood\n${data.checkins.map((item) => `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood}`).join("\n")}`, "text/csv")}><Download size={17}/> Export CSV</button>}/><div className="staff-stats"><article><ClipboardCheck size={20}/><div><strong>{data.checkins.length}</strong><small>Recorded check-ins</small></div></article><article><UsersRound size={20}/><div><strong>31</strong><small>Demo caseload</small></div></article><article><AlertCircle size={20}/><div><strong>{data.checkins[0] && Math.min(data.checkins[0].skin,data.checkins[0].comfort) <= 2 ? 1 : 0}</strong><small>Flagged for review</small></div><span className="status-pill review">Review</span></article></div><div className="reports-grid"><article className="panel report-bars"><div className="panel-heading"><div><span className="eyebrow">Recent check-ins</span><h2>Wellbeing activity</h2></div></div>{data.checkins.slice(0,7).reverse().map((item,index) => <span key={item.id}><i style={{height:`${wellbeing([item])}%`}}/><small>{new Date(item.createdAt).toLocaleDateString("en-GB",{weekday:"narrow"}) || index}</small></span>)}</article><article className="panel audit-list"><div className="panel-heading"><div><span className="eyebrow">Patient status</span><h2>At a glance</h2></div></div>{[["Latest wellbeing",wellbeing(data.checkins),"stable"],["Diary entries",data.diaryEntries.length,"review"],["Messages",data.messages.length,"missing"]].map(([label,count,tone]) => <div key={String(label)}><span className={`status-dot ${tone}`}/><strong>{label}</strong><b>{count}</b></div>)}</article></div></section>;
   if (view === "messages") return <section className="product-view staff-view"><ViewHeading eyebrow="Care team" title="Patient conversations" copy="Secure messages between patients and their stoma care team."/><div className="messages-layout"><article className="panel thread-list"><label className="search-box"><Search size={17}/><input placeholder="Search conversations…"/></label><button className="is-active"><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><span><strong>{data.profile.firstName} Doyle</strong><small>{data.messages.at(-1)?.body || "No messages yet"}</small></span><b>Now</b></button>{patients.slice(0,3).map((patient) => <button key={patient.name}><span className="patient-avatar">{patient.initials}</span><span><strong>{patient.name}</strong><small>Demo conversation</small></span><b>{patient.when}</b></button>)}</article><article className="panel conversation"><header><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><div><strong>{data.profile.firstName} Doyle</strong><small><i/> Demo workspace</small></div><span className="status-pill stable">Connected</span></header><div className="messages">{data.messages.map((message) => <div className={`message ${message.sender}`} key={message.id}><p>{message.body}</p><span>{new Date(message.createdAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span></div>)}</div><div className="composer"><input value={messageBody} onChange={(event) => setMessageBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && messageBody.trim()) event.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent("click",{bubbles:true})); }} placeholder={`Reply to ${data.profile.firstName}…`}/><button disabled={sending || !messageBody.trim()} onClick={async () => { setSending(true); try { await onAction({type:"send_message",body:messageBody,sender:"nurse"}); setMessageBody(""); } finally { setSending(false); } }} aria-label="Send message"><ArrowRight size={19}/></button></div></article></div></section>;
@@ -443,23 +532,46 @@ export default function StomaAlertApp() {
       const result = await response.json() as { data?: AppData; error?: string };
       if (!response.ok || !result.data) throw new Error(result.error || "Could not connect to saved data");
       if (active) { setData(result.data); setSyncState("saved"); }
-    }).catch(() => { if (active) { setSyncState("error"); setNotice("Saved data is temporarily unavailable. The app is showing test data."); } });
+    }).catch(() => {
+      if (!active) return;
+      const local = readLocalData();
+      if (local) setData(local);
+      setSyncState("saved");
+      setNotice(local ? "This prototype is using the test data saved on this device." : "This prototype is using test data. Changes will be saved on this device.");
+    });
     return () => { active = false; };
   }, []);
   const performAction = async (action: AppAction) => {
     setSyncState("saving"); setNotice("");
-    const response = await fetch("/api/app", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify(action) });
-    const result = await response.json() as { data?: AppData; error?: string };
-    if (!response.ok || !result.data) { setSyncState("error"); throw new Error(result.error || "Change could not be saved"); }
-    setData(result.data); setSyncState("saved");
+    try {
+      const response = await fetch("/api/app", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify(action) });
+      const result = await response.json() as { data?: AppData; error?: string };
+      if (!response.ok || !result.data) throw new Error(result.error || "Change could not be saved");
+      setData(result.data); setSyncState("saved");
+    } catch {
+      const next = applyLocalAction(data, action);
+      try { saveLocalData(next); } catch { setSyncState("error"); throw new Error("This device does not have enough storage for the change"); }
+      setData(next); setSyncState("saved");
+      setNotice("Saved on this device in prototype mode.");
+    }
   };
   const uploadPhoto = async (file: File) => {
     setSyncState("saving");
-    const form = new FormData(); form.append("file", file);
-    const response = await fetch("/api/files", { method:"POST", body:form });
-    const result = await response.json() as { data?: AppData; error?: string };
-    if (!response.ok || !result.data) { setSyncState("error"); throw new Error(result.error || "Photo could not be uploaded"); }
-    setData(result.data); setSyncState("saved");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const response = await fetch("/api/files", { method:"POST", body:form });
+      const result = await response.json() as { data?: AppData; error?: string };
+      if (!response.ok || !result.data) throw new Error(result.error || "Photo could not be uploaded");
+      setData(result.data); setSyncState("saved");
+    } catch {
+      if (!file.type.startsWith("image/")) { setSyncState("error"); throw new Error("Only image files are supported"); }
+      if (file.size > localPhotoLimit) { setSyncState("error"); throw new Error("On-device prototype photos must be smaller than 1 MB"); }
+      const now = new Date().toISOString();
+      const fileKey = await readFileAsDataUrl(file);
+      const next: AppData = { ...data, diaryEntries: [{ id:createId(), type:"photo", title:"Diary photo added", detail:`Image: ${file.name} · Saved on this device`, fileKey, fileName:file.name, createdAt:now }, ...data.diaryEntries] };
+      try { saveLocalData(next); } catch { setSyncState("error"); throw new Error("This device does not have enough storage for the photo"); }
+      setData(next); setSyncState("saved"); setNotice("Photo saved on this device in prototype mode.");
+    }
   };
   const staffNav = [
     {id:"caseload" as const,label:"Patients",icon:UsersRound}, {id:"messages" as const,label:"Messages",icon:MessageCircle},

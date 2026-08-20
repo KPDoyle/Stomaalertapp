@@ -42,6 +42,11 @@ npm run lint
 
 Local development uses simulated bindings. A hosted deployment must provide the `DB` D1 binding and `BUCKET` R2 binding declared in `.openai/hosting.json`.
 
+Vercel runs the native Next.js build. When Cloudflare bindings are not present,
+the public prototype remains interactive by keeping its demonstration changes
+in the browser on that device. On-device prototype photos are limited to 1 MB.
+This fallback is for evaluation only and must not be used for real patient data.
+
 ## Data and safety
 
 This repository is a product prototype using demonstration data. It is not a medical device, does not diagnose or recommend treatment, and must not be used with real patient data until appropriate clinical-safety, information-governance, security, regulatory and integration work has been completed.
