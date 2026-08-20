@@ -267,9 +267,50 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
   ];
   const activeSignal = recoveryFlow[activeStage];
   const ActiveSignalIcon = activeSignal.icon;
+  const mobileVitals = [
+    { label:"Output", value:latest.output, icon:Droplets, copy:"Within range" },
+    { label:"Skin", value:latest.skin, icon:Sparkles, copy:"Looking steady" },
+    { label:"Comfort", value:latest.comfort, icon:HeartPulse, copy:"Improving" },
+    { label:"Mood", value:latest.mood, icon:CloudSun, copy:"Feeling positive" },
+  ];
 
   return (
     <section className="award-home">
+      <div className="mobile-patient-home">
+        <header className="mobile-welcome-row">
+          <div><span>Good evening</span><h1>{data.profile.firstName}</h1></div>
+          <button onClick={() => onNavigate("profile")} aria-label="Open your profile">{data.profile.firstName.slice(0,1)}D</button>
+        </header>
+
+        <section className="mobile-status-card">
+          <header><span><i/> Today’s recovery signal</span><small className={`sync-state sync-state--${syncState}`}>{syncState === "saving" ? "Saving…" : syncState === "loading" ? "Connecting…" : "Up to date"}</small></header>
+          <div className="mobile-status-card__body">
+            <div><span className="mobile-overline">60-second check-in</span><h2>{data.profile.checkinHeading}</h2><p>{data.profile.homeSubtitle}</p></div>
+            <ProgressRing value={score}/>
+          </div>
+          <button onClick={onCheckIn}>Start today’s check-in <ArrowRight size={19}/></button>
+        </section>
+
+        <section className="mobile-vitals" aria-label="Latest wellbeing ratings">
+          {mobileVitals.map(({label,value,icon:Icon,copy}) => <article key={label}><span><Icon size={18}/></span><div><small>{label}</small><strong>{value}/5</strong><p>{copy}</p></div></article>)}
+        </section>
+
+        <div className="mobile-section-title"><div><span>Your day</span><h2>What would you like to do?</h2></div><button onClick={() => onNavigate("progress")}>Progress <ArrowUpRight size={15}/></button></div>
+        <section className="mobile-action-grid">
+          <button onClick={() => onNavigate("diary")}><span><Camera size={21}/></span><div><strong>Add diary photo</strong><small>Keep a visual record</small></div><ChevronRight size={18}/></button>
+          <button onClick={() => onNavigate("supplies")}><span><PackageCheck size={21}/></span><div><strong>Manage supplies</strong><small>About four days left</small></div><ChevronRight size={18}/></button>
+          <button onClick={() => onNavigate("learn")}><span><BookOpen size={21}/></span><div><strong>Learn & prepare</strong><small>Guidance for your stage</small></div><ChevronRight size={18}/></button>
+          <button onClick={onMessage}><span><MessageCircle size={21}/></span><div><strong>Message your nurse</strong><small>Usually replies in one day</small></div><ChevronRight size={18}/></button>
+        </section>
+
+        <section className="mobile-nurse-card">
+          <div className="nurse-avatar nurse-avatar--large">SW<span/></div>
+          <div><small>Your stoma care nurse</small><strong>{data.profile.nurse}</strong><p><i/> Available to support you</p></div>
+          <button onClick={onMessage} aria-label={`Message ${data.profile.nurse}`}><ArrowUpRight size={18}/></button>
+        </section>
+      </div>
+
+      <div className="desktop-patient-home">
       <header className="award-greeting">
         <div><span className="eyebrow">Patient workspace · {workspaceDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span><p>Good evening, {data.profile.firstName}</p></div>
         <div className="award-greeting__right"><span className={`sync-state sync-state--${syncState}`}><ShieldCheck size={16} /> {syncState === "saving" ? "Saving changes…" : syncState === "error" ? "Using demo data" : syncState === "loading" ? "Connecting…" : "All changes saved"}</span><button className="profile-button" onClick={() => onNavigate("profile")} aria-label="Open your profile">{data.profile.firstName.slice(0,1)}D</button></div>
@@ -354,6 +395,7 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
           </div>
         </article>
       </section>
+      </div>
     </section>
   );
 }
@@ -583,7 +625,7 @@ export default function StomaAlertApp() {
     <div className="site-shell">
       <div className="prototype-banner"><span>Prototype</span> Test data only — not for use with real patients</div>
       {notice && <div className="app-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15}/></button></div>}
-      <header className="mobile-header"><Brand compact /><button className="icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Open menu"><Menu size={21} /></button></header>
+      <header className="mobile-header"><Brand compact /><div className="mobile-header__actions">{role === "Patient" && <button className="mobile-header__profile" onClick={() => setView("profile")} aria-label="Open your profile"><CircleUserRound size={20}/></button>}<button className="icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Open menu"><Menu size={21} /></button></div></header>
       <aside className={`sidebar ${menuOpen ? "is-open" : ""}`}>
         <div className="sidebar__top"><Brand /><button className="icon-button sidebar__close" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={20} /></button></div>
         <div className="role-switcher">
@@ -599,7 +641,13 @@ export default function StomaAlertApp() {
       </aside>
       {menuOpen && <button className="menu-backdrop" onClick={() => setMenuOpen(false)} aria-label="Close menu"/>}
       <main className="app-content">{role === "Patient" ? patientContent : <StaffDashboard role={role} view={staffView} data={data} onAction={performAction}/>}</main>
-      {role === "Patient" && <nav className="mobile-nav" aria-label="Quick navigation">{navItems.slice(0,4).map(({id,label,icon:Icon}) => <button key={id} className={view===id?"is-active":""} onClick={() => setView(id)}><Icon size={20}/><span>{label}</span></button>)}</nav>}
+      {role === "Patient" && <nav className="mobile-nav" aria-label="Quick navigation">
+        <button className={view==="home"?"is-active":""} onClick={() => setView("home")}><Home size={21}/><span>Home</span></button>
+        <button className={view==="diary"?"is-active":""} onClick={() => setView("diary")}><BookOpen size={21}/><span>Diary</span></button>
+        <button className="mobile-nav__checkin" onClick={() => setCheckInOpen(true)} aria-label="Start today’s check-in"><i><ClipboardCheck size={23}/></i><span>Check in</span></button>
+        <button className={view==="progress"?"is-active":""} onClick={() => setView("progress")}><LineChart size={21}/><span>Progress</span></button>
+        <button className={!["home","diary","progress"].includes(view)?"is-active":""} onClick={() => setMenuOpen(true)}><Menu size={21}/><span>More</span></button>
+      </nav>}
       {checkInOpen && <CheckInPanel heading={data.profile.checkinHeading} onSave={(scores) => performAction({ type:"save_checkin", scores })} onClose={() => setCheckInOpen(false)}/>} 
       {messageOpen && <PatientMessagePanel data={data} onAction={performAction} onClose={() => setMessageOpen(false)}/>} 
     </div>
