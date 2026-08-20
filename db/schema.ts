@@ -88,3 +88,11 @@ export const careTasks = sqliteTable("care_tasks", {
   dueDate: text("due_date").notNull(),
   completed: integer("completed", { mode: "boolean" }).notNull(),
 });
+
+export const contentSettings = sqliteTable("content_settings", {
+  owner: text("owner").primaryKey(),
+  learningIntro: text("learning_intro").notNull(),
+  productHelp: text("product_help").notNull(),
+  safetyMessage: text("safety_message").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

@@ -78,6 +78,12 @@ export type CareTaskData = {
   completed: boolean;
 };
 
+export type ContentSettingsData = {
+  learningIntro: string;
+  productHelp: string;
+  safetyMessage: string;
+};
+
 export type AppData = {
   profile: ProfileData;
   checkins: CheckInData[];
@@ -87,15 +93,22 @@ export type AppData = {
   careLogs: CareLogData[];
   inventory: InventoryItemData[];
   careTasks: CareTaskData[];
+  content: ContentSettingsData;
 };
 
 export type AppAction =
   | { type: "save_checkin"; scores: number[] }
   | { type: "update_profile"; profile: Partial<ProfileData> }
-  | { type: "request_supplies"; supplier: string }
+  | { type: "request_supplies"; supplier: string; product?: string }
+  | { type: "update_supply_status"; id: string; status: "Requested" | "Approved" | "Dispatched" | "Delivered" }
   | { type: "toggle_guide"; index: number }
   | { type: "send_message"; body: string; sender: "patient" | "nurse" }
+  | { type: "add_diary_note"; title: string; detail: string }
   | { type: "save_care_log"; log: Omit<CareLogData, "id" | "createdAt"> }
   | { type: "adjust_inventory"; id: string; change: number }
+  | { type: "add_inventory_item"; item: Omit<InventoryItemData, "id"> }
+  | { type: "remove_inventory_item"; id: string }
   | { type: "toggle_care_task"; id: string }
-  | { type: "update_content"; homeSubtitle: string; checkinHeading: string };
+  | { type: "add_care_task"; task: Omit<CareTaskData, "id" | "completed"> }
+  | { type: "remove_care_task"; id: string }
+  | { type: "update_content"; homeSubtitle: string; checkinHeading: string; learningIntro: string; productHelp: string; safetyMessage: string };

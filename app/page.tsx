@@ -86,6 +86,11 @@ const fallbackData: AppData = {
     { id:"demo-task-3", category:"travel", title:"Prepare an emergency change kit", detail:"Pouches, wipes, disposal bags and spare clothes", dueDate:"2026-09-01", completed:false },
     { id:"demo-task-4", category:"recovery", title:"Gentle movement goal", detail:"A short walk if your care team has confirmed it is suitable", dueDate:"2026-08-22", completed:true },
   ],
+  content: {
+    learningIntro:"Clear, trusted guidance that meets you where you are in recovery.",
+    productHelp:"Track what you have at home, prevent shortages and contact your care team when a product is not working well.",
+    safetyMessage:"Use your individual care plan. New, worsening or concerning symptoms should be discussed with your stoma care team.",
+  },
 };
 
 const localDataKey = "stoma-alert-device-demo-v2";
@@ -100,7 +105,9 @@ function createId() {
 function readLocalData() {
   try {
     const value = localStorage.getItem(localDataKey);
-    return value ? JSON.parse(value) as AppData : null;
+    if (!value) return null;
+    const saved = JSON.parse(value) as Partial<AppData>;
+    return { ...fallbackData, ...saved, profile:{ ...fallbackData.profile, ...saved.profile }, content:{ ...fallbackData.content, ...saved.content } } as AppData;
   } catch {
     return null;
   }
@@ -135,8 +142,12 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
     return {
       ...current,
       profile: { ...current.profile, supplier },
-      supplyRequests: [{ id: createId(), supplier, product: "Drainable pouch · 60mm", status: "Requested", createdAt: now }, ...current.supplyRequests],
+      supplyRequests: [{ id: createId(), supplier, product: action.product?.trim() || "Drainable pouch · 60mm", status: "Requested", createdAt: now }, ...current.supplyRequests],
     };
+  }
+
+  if (action.type === "update_supply_status") {
+    return { ...current, supplyRequests:current.supplyRequests.map((request) => request.id === action.id ? { ...request, status:action.status } : request) };
   }
 
   if (action.type === "toggle_guide") {
@@ -150,6 +161,13 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
     const body = action.body.trim();
     if (!body || body.length > 1000) throw new Error("Enter a message up to 1,000 characters");
     return { ...current, messages: [...current.messages, { id: createId(), sender: action.sender, body, createdAt: now }] };
+  }
+
+  if (action.type === "add_diary_note") {
+    const title = action.title.trim();
+    const detail = action.detail.trim();
+    if (!title || !detail) throw new Error("Add a title and note");
+    return { ...current, diaryEntries:[{ id:createId(), type:"note", title, detail, fileKey:null, fileName:null, createdAt:now }, ...current.diaryEntries] };
   }
 
   if (action.type === "save_care_log") {
@@ -167,9 +185,21 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
     return { ...current, inventory:current.inventory.map((item) => item.id === action.id ? { ...item, quantity:Math.max(0,item.quantity + action.change) } : item) };
   }
 
+  if (action.type === "add_inventory_item") {
+    const item = action.item;
+    if (!item.name.trim() || !item.productCode.trim() || !item.unit.trim()) throw new Error("Complete the product details");
+    return { ...current, inventory:[...current.inventory, { id:createId(), ...item, name:item.name.trim(), productCode:item.productCode.trim(), unit:item.unit.trim() }] };
+  }
+
+  if (action.type === "remove_inventory_item") return { ...current, inventory:current.inventory.filter((item) => item.id !== action.id) };
+
   if (action.type === "toggle_care_task") {
     return { ...current, careTasks:current.careTasks.map((task) => task.id === action.id ? { ...task, completed:!task.completed } : task) };
   }
+
+  if (action.type === "add_care_task") return { ...current, careTasks:[...current.careTasks, { id:createId(), ...action.task, completed:false }] };
+
+  if (action.type === "remove_care_task") return { ...current, careTasks:current.careTasks.filter((task) => task.id !== action.id) };
 
   if (action.type === "update_content") return {
     ...current,
@@ -177,6 +207,11 @@ function applyLocalAction(current: AppData, action: AppAction): AppData {
       ...current.profile,
       homeSubtitle: action.homeSubtitle.trim(),
       checkinHeading: action.checkinHeading.trim(),
+    },
+    content: {
+      learningIntro:action.learningIntro.trim(),
+      productHelp:action.productHelp.trim(),
+      safetyMessage:action.safetyMessage.trim(),
     },
   };
 
@@ -415,10 +450,10 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
         <article className="today-card">
           <div className="bento-head"><div><span className="eyebrow">Today’s snapshot</span><h3>All four areas are in view</h3></div><Activity size={20}/></div>
           <div className="snapshot-list">
-            <button><span className="snapshot-icon mint"><Droplets size={17}/></span><span><b>Output</b><small>Within your usual range</small></span><i className="steady">Steady</i></button>
-            <button><span className="snapshot-icon butter"><Sparkles size={17}/></span><span><b>Skin</b><small>No new irritation logged</small></span><i className="steady">Steady</i></button>
-            <button><span className="snapshot-icon coral"><HeartPulse size={17}/></span><span><b>Comfort</b><small>Improving this week</small></span><i className="up">Up</i></button>
-            <button><span className="snapshot-icon blue"><CloudSun size={17}/></span><span><b>Mood</b><small>Feeling positive</small></span><i className="up">Up</i></button>
+            <button onClick={() => onNavigate("care")}><span className="snapshot-icon mint"><Droplets size={17}/></span><span><b>Output</b><small>Within your usual range</small></span><i className="steady">Steady</i></button>
+            <button onClick={() => onNavigate("care")}><span className="snapshot-icon butter"><Sparkles size={17}/></span><span><b>Skin</b><small>No new irritation logged</small></span><i className="steady">Steady</i></button>
+            <button onClick={() => onNavigate("progress")}><span className="snapshot-icon coral"><HeartPulse size={17}/></span><span><b>Comfort</b><small>Improving this week</small></span><i className="up">Up</i></button>
+            <button onClick={() => onNavigate("progress")}><span className="snapshot-icon blue"><CloudSun size={17}/></span><span><b>Mood</b><small>Feeling positive</small></span><i className="up">Up</i></button>
           </div>
         </article>
 
@@ -454,6 +489,8 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [taskDraft, setTaskDraft] = useState({ category:"routine" as const, title:"", detail:"", dueDate:new Date().toISOString().slice(0,10) });
+  const [taskSaving, setTaskSaving] = useState(false);
   const latest = data.careLogs[0];
   const referenceAmount = data.profile.stomaType === "Ileostomy" ? 1500 : data.profile.stomaType === "Colostomy" ? 1000 : 2000;
   const needsReview = Boolean(latest && (latest.skinStatus === "broken" || latest.skinStatus === "sore" || latest.pain >= 7 || latest.leak || (latest.consistency === "watery" && latest.outputMl >= referenceAmount)));
@@ -466,6 +503,12 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
     try { await onAction({ type:"save_care_log", log:draft }); setSaved(true); setDraft((current) => ({ ...current, pouchChanged:false, leak:false, food:"", symptoms:"" })); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Care log could not be saved"); }
     finally { setSaving(false); }
+  };
+  const addTask = async () => {
+    setTaskSaving(true); setError("");
+    try { await onAction({ type:"add_care_task", task:taskDraft }); setTaskDraft((current) => ({ ...current, title:"", detail:"" })); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Care task could not be saved"); }
+    finally { setTaskSaving(false); }
   };
   const exportCareSummary = () => downloadFile("stoma-alert-care-summary.csv", `date,output_ml,consistency,hydration_ml,skin,pain,leak,pouch_changed,food,symptoms\n${data.careLogs.map((log) => [log.createdAt,log.outputMl,log.consistency,log.hydrationMl,log.skinStatus,log.pain,log.leak,log.pouchChanged,JSON.stringify(log.food),JSON.stringify(log.symptoms)].join(",")).join("\n")}`, "text/csv");
   const downloadTravelCard = () => downloadFile("stoma-alert-travel-card.txt", `STOMA TRAVEL INFORMATION\n\nName: ${data.profile.firstName}\nStoma type: ${data.profile.stomaType}\nStoma care nurse: ${data.profile.nurse}\nSupplier: ${data.profile.supplier}\n\nThis person has a stoma and carries essential medical supplies. They may need privacy, additional time and access to toilet facilities.\n\nPrototype card — ask your clinician to verify details before travel.` , "text/plain");
@@ -500,7 +543,7 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
       </article>
       <aside className="care-side-stack">
         <article className="panel care-history"><div className="panel-heading"><div><span className="eyebrow">Recent record</span><h2>Your care timeline</h2></div></div>{data.careLogs.slice(0,4).map((log) => <div key={log.id}><span className={`care-history__dot ${log.leak || log.skinStatus === "sore" || log.skinStatus === "broken" ? "review" : ""}`}/><div><strong>{new Date(log.createdAt).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</strong><p>{log.outputMl} ml · {log.consistency} · {log.hydrationMl} ml fluids</p><small>{log.skinStatus} skin · pain {log.pain}/10{log.pouchChanged ? " · pouch changed" : ""}</small></div></div>)}</article>
-        <article className="care-reference"><AlertCircle size={20}/><div><strong>Know when to get help</strong><p>Use your individual care plan. Seek urgent clinical advice for severe cramps, vomiting, heavy bleeding, dehydration signs, or no stoma activity with concerning symptoms.</p><a href="https://www.nhs.uk/tests-and-treatments/ileostomy/complications/" target="_blank" rel="noreferrer">Read NHS guidance <ArrowUpRight size={14}/></a></div></article>
+        <article className="care-reference"><AlertCircle size={20}/><div><strong>Know when to get help</strong><p>{data.content.safetyMessage}</p><a href="https://www.nhs.uk/tests-and-treatments/ileostomy/complications/" target="_blank" rel="noreferrer">Read NHS guidance <ArrowUpRight size={14}/></a></div></article>
       </aside>
     </div>}
 
@@ -512,8 +555,9 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
     </div>}
 
     {tab === "plan" && <div className="plan-layout">
-      <article className="panel task-list"><div className="panel-heading"><div><span className="eyebrow">Routine, appointments and recovery</span><h2>Your shared care plan</h2></div><span>{completedTasks}/{data.careTasks.length} complete</span></div>{data.careTasks.map((task) => { const Icon = taskIcon[task.category]; return <button key={task.id} className={task.completed ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_care_task", id:task.id })}><i>{task.completed ? <Check size={16}/> : <Icon size={17}/>}</i><span><strong>{task.title}</strong><p>{task.detail}</p><small>{task.category} · {new Date(task.dueDate).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></span><ChevronRight size={17}/></button>})}</article>
+      <article className="panel task-list"><div className="panel-heading"><div><span className="eyebrow">Routine, appointments and recovery</span><h2>Your shared care plan</h2></div><span>{completedTasks}/{data.careTasks.length} complete</span></div>{data.careTasks.map((task) => { const Icon = taskIcon[task.category]; return <div className="task-item" key={task.id}><button className={task.completed ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_care_task", id:task.id })}><i>{task.completed ? <Check size={16}/> : <Icon size={17}/>}</i><span><strong>{task.title}</strong><p>{task.detail}</p><small>{task.category} · {new Date(task.dueDate).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></span><ChevronRight size={17}/></button><button className="row-remove" onClick={() => onAction({ type:"remove_care_task", id:task.id })} aria-label={`Remove ${task.title}`}><X size={16}/></button></div>})}</article>
       <aside className="plan-side">
+        <article className="panel add-item-form"><span className="eyebrow">Add to your plan</span><h2>New care task</h2><label>Category<select value={taskDraft.category} onChange={(event) => setTaskDraft((current) => ({ ...current, category:event.target.value as typeof taskDraft.category }))}><option value="routine">Routine</option><option value="appointment">Appointment</option><option value="travel">Travel</option><option value="recovery">Recovery</option></select></label><label>Task<input value={taskDraft.title} maxLength={100} onChange={(event) => setTaskDraft((current) => ({ ...current, title:event.target.value }))} placeholder="What needs doing?"/></label><label>Details<textarea value={taskDraft.detail} maxLength={300} onChange={(event) => setTaskDraft((current) => ({ ...current, detail:event.target.value }))} placeholder="Add a helpful reminder"/></label><label>Due date<input type="date" value={taskDraft.dueDate} onChange={(event) => setTaskDraft((current) => ({ ...current, dueDate:event.target.value }))}/></label><button className="button" disabled={taskSaving || !taskDraft.title.trim() || !taskDraft.detail.trim()} onClick={addTask}>{taskSaving ? "Adding…" : "Add care task"}<Plus size={16}/></button></article>
         <article className="next-appointment"><span><CalendarDays size={22}/></span><small>Next care review</small><h3>26 August · 10:30</h3><p>Video appointment with {data.profile.nurse}</p><button onClick={onMessage}>Send a question first <ArrowRight size={15}/></button></article>
         <article className="panel recovery-path"><span className="eyebrow">Recovery pathway</span><h2>Move with confidence</h2>{["Reconnect with breathing","Gentle everyday movement","Build strength gradually"].map((item,index) => <div key={item}><i>{index + 1}</i><span><strong>{item}</strong><small>{index === 0 ? "Current phase" : "Unlock with your care plan"}</small></span></div>)}<p><HeartHandshake size={16}/> Confirm movement and lifting advice with your own clinical team.</p></article>
       </aside>
@@ -529,15 +573,29 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
   </section>;
 }
 
-function DiaryView({ data, onCheckIn, onUpload }: { data: AppData; onCheckIn: () => void; onUpload: (file: File) => Promise<void> }) {
-  const [filter, setFilter] = useState<"all" | "checkin" | "photo">("all");
+function DiaryView({ data, onCheckIn, onUpload, onAction }: { data: AppData; onCheckIn: () => void; onUpload: (file: File) => Promise<void>; onAction: (action: AppAction) => Promise<void> }) {
+  const [filter, setFilter] = useState<"all" | "checkin" | "photo" | "note">("all");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [noteDraft, setNoteDraft] = useState({ title:"", detail:"" });
+  const [savingNote, setSavingNote] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const entries = data.diaryEntries;
-  const days = Array.from({ length: 31 }, (_, index) => index + 1);
-  const entryDays = new Set(entries.map((entry) => new Date(entry.createdAt).getDate()));
+  const calendarDate = new Date(entries[0]?.createdAt || fallbackData.checkins[0].createdAt);
+  const calendarYear = calendarDate.getFullYear();
+  const calendarMonth = calendarDate.getMonth();
+  const days = Array.from({ length:new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => index + 1);
+  const leadingDays = (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7;
+  const entryDays = new Set(entries.filter((entry) => { const date = new Date(entry.createdAt); return date.getFullYear() === calendarYear && date.getMonth() === calendarMonth; }).map((entry) => new Date(entry.createdAt).getDate()));
   const photos = entries.filter((entry) => entry.type === "photo").length;
+  const visibleEntries = entries.filter((entry) => {
+    const date = new Date(entry.createdAt);
+    const matchesType = filter === "all" || entry.type === filter;
+    const matchesDay = selectedDay === null || (date.getFullYear() === calendarYear && date.getMonth() === calendarMonth && date.getDate() === selectedDay);
+    return matchesType && matchesDay;
+  });
+  const saveNote = async () => { setSavingNote(true); setError(""); try { await onAction({ type:"add_diary_note", ...noteDraft }); setNoteDraft({ title:"", detail:"" }); } catch (caught) { setError(caught instanceof Error ? caught.message : "Note could not be saved"); } finally { setSavingNote(false); } };
   return <section className="product-view">
     <ViewHeading eyebrow="Your record" title="Diary" copy="A private timeline of check-ins, images and notes shared with your care team." action={<button className="button" onClick={onCheckIn}>New check-in <ClipboardCheck size={17} /></button>} />
     <div className="mini-stats">
@@ -551,16 +609,17 @@ function DiaryView({ data, onCheckIn, onUpload }: { data: AppData; onCheckIn: ()
       <button className="button" disabled={!file || uploading} onClick={async () => { if (!file) return; setUploading(true); setError(""); try { await onUpload(file); setFile(null); } catch (caught) { setError(caught instanceof Error ? caught.message : "Upload failed"); } finally { setUploading(false); } }}>{uploading ? "Uploading…" : "Upload photo"} <ArrowUpRight size={16}/></button>
       {error && <p className="form-error" role="alert">{error}</p>}
     </article>
+    <article className="panel diary-note-form"><div><span className="diary-upload__icon"><FileText size={22}/></span><div><strong>Add a private note</strong><p>Capture a meal, symptom, question or moment you want to remember.</p></div></div><label>Title<input value={noteDraft.title} maxLength={80} onChange={(event) => setNoteDraft((current) => ({ ...current, title:event.target.value }))} placeholder="A short heading"/></label><label>Note<textarea value={noteDraft.detail} maxLength={1000} onChange={(event) => setNoteDraft((current) => ({ ...current, detail:event.target.value }))} placeholder="Write your note…"/></label><button className="button" disabled={savingNote || !noteDraft.title.trim() || !noteDraft.detail.trim()} onClick={saveNote}>{savingNote ? "Saving…" : "Save note"}<Plus size={16}/></button></article>
     <div className="two-col-layout">
       <article className="panel calendar-panel">
-        <div className="panel-heading"><div><span className="eyebrow">August 2026</span><h2>Your activity</h2></div><CalendarDays size={20} /></div>
+        <div className="panel-heading"><div><span className="eyebrow">{calendarDate.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</span><h2>Your activity</h2></div>{selectedDay ? <button className="calendar-clear" onClick={() => setSelectedDay(null)}>Show all</button> : <CalendarDays size={20} />}</div>
         <div className="calendar-days">{["M","T","W","T","F","S","S"].map((day,index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
-        <div className="calendar-grid"><span /><span /><span /><span /><span />{days.map((day) => <button key={day} className={entryDays.has(day) ? "has-entry" : day === new Date().getDate() ? "is-today" : ""}>{day}</button>)}</div>
-        <div className="calendar-key"><span><i className="key-checkin" /> Check-in</span><span><i className="key-photo" /> Photo</span></div>
+        <div className="calendar-grid">{Array.from({length:leadingDays},(_,index) => <span key={`blank-${index}`}/>) }{days.map((day) => <button key={day} aria-pressed={selectedDay === day} onClick={() => setSelectedDay(selectedDay === day ? null : day)} className={`${entryDays.has(day) ? "has-entry" : ""} ${selectedDay === day ? "is-selected" : ""}`.trim()}>{day}</button>)}</div>
+        <div className="calendar-key"><span><i className="key-checkin" /> Activity saved</span><span>{selectedDay ? `Showing ${selectedDay} ${calendarDate.toLocaleDateString("en-GB",{month:"short"})}` : "Choose a day to filter"}</span></div>
       </article>
       <article className="panel timeline-panel">
-        <div className="panel-heading timeline-heading"><div><span className="eyebrow">Recent activity</span><h2>Your timeline</h2></div><div className="filter-pills">{(["all","checkin","photo"] as const).map(item => <button key={item} className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All" : item === "checkin" ? "Check-ins" : "Photos"}</button>)}</div></div>
-        <div className="timeline-list">{entries.filter(entry => filter === "all" || entry.type === filter).map((entry) => { const stamp = formatEntryDate(entry.createdAt); const photoHref = entry.fileKey?.startsWith("data:") ? entry.fileKey : entry.fileKey ? `/api/files?key=${encodeURIComponent(entry.fileKey)}` : null; return <div className="timeline-entry" key={entry.id}><span className={`timeline-icon ${entry.type === "photo" ? "photo" : "good"}`}>{entry.type === "photo" ? <Camera size={18} /> : <ClipboardCheck size={18} />}</span><div><span>{stamp.day} · {stamp.time}</span><strong>{entry.title}</strong><p>{entry.detail}</p>{photoHref && <a className="photo-link" href={photoHref} target="_blank" rel="noreferrer">View private photo <ArrowUpRight size={13}/></a>}</div><ChevronRight size={18} /></div>; })}</div>
+        <div className="panel-heading timeline-heading"><div><span className="eyebrow">Recent activity</span><h2>Your timeline</h2></div><div className="filter-pills">{(["all","checkin","photo","note"] as const).map(item => <button key={item} className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All" : item === "checkin" ? "Check-ins" : item === "photo" ? "Photos" : "Notes"}</button>)}</div></div>
+        <div className="timeline-list">{visibleEntries.length ? visibleEntries.map((entry) => { const stamp = formatEntryDate(entry.createdAt); const photoHref = entry.fileKey?.startsWith("data:") ? entry.fileKey : entry.fileKey ? `/api/files?key=${encodeURIComponent(entry.fileKey)}` : null; return <div className="timeline-entry" key={entry.id}><span className={`timeline-icon ${entry.type === "photo" ? "photo" : "good"}`}>{entry.type === "photo" ? <Camera size={18} /> : entry.type === "note" ? <FileText size={18}/> : <ClipboardCheck size={18} />}</span><div><span>{stamp.day} · {stamp.time}</span><strong>{entry.title}</strong><p>{entry.detail}</p>{photoHref && <a className="photo-link" href={photoHref} target="_blank" rel="noreferrer">View private photo <ArrowUpRight size={13}/></a>}</div></div>; }) : <p className="empty-state">No activity matches this view.</p>}</div>
       </article>
     </div>
   </section>;
@@ -591,23 +650,29 @@ function ProgressView({ data }: { data: AppData }) {
   </section>;
 }
 
-function SuppliesView({ data, onAction }: { data: AppData; onAction: (action: AppAction) => Promise<void> }) {
+function SuppliesView({ data, onAction, onMessage }: { data: AppData; onAction: (action: AppAction) => Promise<void>; onMessage: () => void }) {
   const [supplier, setSupplier] = useState(data.profile.supplier);
   const [requested, setRequested] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState("");
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productDraft, setProductDraft] = useState({ name:"", productCode:"", quantity:0, reorderAt:5, unit:"items" });
+  const [addingProduct, setAddingProduct] = useState(false);
+  const lowProducts = data.inventory.filter((item) => item.quantity <= item.reorderAt);
+  const reorderProduct = lowProducts.length ? lowProducts.map((item) => item.name).join("; ") : data.inventory[0]?.name || "Stoma supplies";
+  const addProduct = async () => { setAddingProduct(true); setError(""); try { await onAction({ type:"add_inventory_item", item:productDraft }); setProductDraft({ name:"", productCode:"", quantity:0, reorderAt:5, unit:"items" }); setShowProductForm(false); } catch (caught) { setError(caught instanceof Error ? caught.message : "Product could not be added"); } finally { setAddingProduct(false); } };
   return <section className="product-view">
-    <ViewHeading eyebrow="Product support" title="Your supplies" copy="Keep track of your products and request the next delivery from your chosen supplier." action={<button className="button button--quiet" onClick={() => setShowHistory(!showHistory)}><PackageOpen size={17} /> {showHistory ? "Hide history" : "Request history"}</button>} />
+    <ViewHeading eyebrow="Product support" title="Your supplies" copy={data.content.productHelp} action={<button className="button button--quiet" onClick={() => setShowHistory(!showHistory)}><PackageOpen size={17} /> {showHistory ? "Hide history" : "Request history"}</button>} />
     {requested && <div className="success-banner"><CheckCircle2 size={19} /><div><strong>Reorder request sent</strong><p>{supplier} will contact you to confirm the delivery.</p></div><button onClick={() => setRequested(false)} aria-label="Dismiss"><X size={17}/></button></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {showHistory && <article className="panel request-history"><div className="panel-heading"><div><span className="eyebrow">Saved requests</span><h2>Reorder history</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item) => <div key={item.id}><span><strong>{item.product}</strong><small>{new Date(item.createdAt).toLocaleString("en-GB")}</small></span><b>{item.supplier}</b><i className="status-pill review">{item.status}</i></div>) : <p>No requests yet. Your next reorder will appear here.</p>}</article>}
+    {showHistory && <article className="panel request-history"><div className="panel-heading"><div><span className="eyebrow">Saved requests</span><h2>Reorder history</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item) => <div key={item.id}><span><strong>{item.product}</strong><small>{new Date(item.createdAt).toLocaleString("en-GB")}</small></span><b>{item.supplier}</b><i className={`status-pill ${item.status === "Delivered" ? "stable" : "review"}`}>{item.status}</i></div>) : <p>No requests yet. Your next reorder will appear here.</p>}</article>}
     <div className="supplies-layout">
       <div>
-        <article className="panel inventory-card"><div className="panel-heading"><div><span className="eyebrow">Live inventory</span><h2>Products at home</h2></div><Box size={20}/></div><p>Adjust quantities as you use or receive products. Low-stock items are highlighted automatically.</p><div className="inventory-list">{data.inventory.map((item) => { const low = item.quantity <= item.reorderAt; return <div key={item.id} className={low ? "is-low" : ""}><span className="inventory-icon"><PackageCheck size={19}/></span><span><strong>{item.name}</strong><small>{item.productCode} · reorder at {item.reorderAt}</small></span><i className={`status-pill ${low ? "review" : "stable"}`}>{low ? "Low stock" : "In stock"}</i><div className="stepper-control"><button aria-label={`Remove one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:-1 })}><Minus size={14}/></button><b>{item.quantity}</b><button aria-label={`Add one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:1 })}><Plus size={14}/></button></div></div>})}</div></article>
-        <article className="panel request-card"><div><span className="eyebrow">Quick reorder</span><h2>Ready for your next box?</h2><p>Your request goes to {supplier}. They’ll confirm quantities and delivery.</p></div><button className="button" onClick={async () => { setRequesting(true); setError(""); try { await onAction({ type:"request_supplies", supplier }); setRequested(true); } catch (caught) { setError(caught instanceof Error ? caught.message : "Request could not be sent"); } finally { setRequesting(false); } }} disabled={requested || requesting}>{requesting ? "Sending…" : requested ? "Request sent" : "Request supplies"} <ArrowRight size={17} /></button></article>
+        <article className="panel inventory-card"><div className="panel-heading"><div><span className="eyebrow">Live inventory</span><h2>Products at home</h2></div><button className="small-action" onClick={() => setShowProductForm(!showProductForm)}>{showProductForm ? <X size={16}/> : <Plus size={16}/>} {showProductForm ? "Cancel" : "Add product"}</button></div><p>Adjust quantities as you use or receive products. Low-stock items are highlighted automatically.</p>{showProductForm && <div className="add-product-form"><label>Product name<input value={productDraft.name} maxLength={100} onChange={(event) => setProductDraft((current) => ({...current,name:event.target.value}))}/></label><label>Product code<input value={productDraft.productCode} maxLength={40} onChange={(event) => setProductDraft((current) => ({...current,productCode:event.target.value}))}/></label><label>Quantity<input type="number" min="0" max="999" value={productDraft.quantity} onChange={(event) => setProductDraft((current) => ({...current,quantity:Number(event.target.value)}))}/></label><label>Reorder at<input type="number" min="0" max="999" value={productDraft.reorderAt} onChange={(event) => setProductDraft((current) => ({...current,reorderAt:Number(event.target.value)}))}/></label><label>Unit<input value={productDraft.unit} maxLength={30} onChange={(event) => setProductDraft((current) => ({...current,unit:event.target.value}))}/></label><button className="button" disabled={addingProduct || !productDraft.name.trim() || !productDraft.productCode.trim()} onClick={addProduct}>{addingProduct ? "Adding…" : "Add to inventory"}</button></div>}<div className="inventory-list">{data.inventory.map((item) => { const low = item.quantity <= item.reorderAt; return <div key={item.id} className={low ? "is-low" : ""}><span className="inventory-icon"><PackageCheck size={19}/></span><span><strong>{item.name}</strong><small>{item.productCode} · reorder at {item.reorderAt} {item.unit}</small></span><i className={`status-pill ${low ? "review" : "stable"}`}>{low ? "Low stock" : "In stock"}</i><div className="stepper-control"><button aria-label={`Remove one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:-1 })}><Minus size={14}/></button><b>{item.quantity}</b><button aria-label={`Add one ${item.name}`} onClick={() => onAction({ type:"adjust_inventory", id:item.id, change:1 })}><Plus size={14}/></button></div><button className="inventory-remove" aria-label={`Delete ${item.name}`} onClick={() => onAction({ type:"remove_inventory_item", id:item.id })}><X size={15}/></button></div>})}</div></article>
+        <article className="panel request-card"><div><span className="eyebrow">Quick reorder</span><h2>Ready for your next box?</h2><p>Requesting: {reorderProduct}. {supplier} will confirm quantities and delivery.</p></div><button className="button" onClick={async () => { setRequesting(true); setError(""); try { await onAction({ type:"request_supplies", supplier, product:reorderProduct }); setRequested(true); } catch (caught) { setError(caught instanceof Error ? caught.message : "Request could not be sent"); } finally { setRequesting(false); } }} disabled={requested || requesting}>{requesting ? "Sending…" : requested ? "Request sent" : "Request supplies"} <ArrowRight size={17} /></button></article>
       </div>
-      <aside className="panel supplier-card"><span className="eyebrow">Delivery partner</span><h2>Your supplier</h2><p>Choose who receives this demo reorder request.</p><label htmlFor="supplier">Selected supplier</label><div className="select-wrap"><select id="supplier" value={supplier} onChange={(event) => { setSupplier(event.target.value); setRequested(false); }}>{["Fittleworth","Coloplast Charter","SecuriCare","Amcare","Bullen","Respond","Salts Healthcare"].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={17}/></div><div className="supplier-help"><MessageCircle size={18}/><div><strong>Having a product problem?</strong><p>Message your care team for fitting support.</p></div><ChevronRight size={17}/></div></aside>
+      <aside className="panel supplier-card"><span className="eyebrow">Delivery partner</span><h2>Your supplier</h2><p>Choose who receives this demo reorder request.</p><label htmlFor="supplier">Selected supplier</label><div className="select-wrap"><select id="supplier" value={supplier} onChange={(event) => { setSupplier(event.target.value); setRequested(false); }}>{["Fittleworth","Coloplast Charter","SecuriCare","Amcare","Bullen","Respond","Salts Healthcare"].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={17}/></div><button className="supplier-help" onClick={onMessage}><MessageCircle size={18}/><div><strong>Having a product problem?</strong><p>Message your care team for fitting support.</p></div><ChevronRight size={17}/></button></aside>
     </div>
   </section>;
 }
@@ -615,15 +680,18 @@ function SuppliesView({ data, onAction }: { data: AppData; onAction: (action: Ap
 function LearnView({ data, onAction }: { data: AppData; onAction: (action: AppAction) => Promise<void> }) {
   const done = data.profile.learning;
   const completed = done.filter(Boolean).length;
+  const [selectedGuide, setSelectedGuide] = useState<number | null>(null);
   const guides = [
-    { title: "Caring for the skin around your stoma", category: "Everyday care", time: "6 min", tone: "mint" },
-    { title: "Eating and drinking with confidence", category: "Food & hydration", time: "8 min", tone: "peach" },
-    { title: "Getting out and about again", category: "Living well", time: "5 min", tone: "lilac" },
+    { title:"Caring for the skin around your stoma", category:"Everyday care", time:"6 min", tone:"mint", intro:"Healthy peristomal skin usually looks and feels much like the skin elsewhere on your abdomen.", sections:[{title:"Build a gentle routine",body:"Prepare everything before removing your pouch. Clean with warm water unless your own care team recommends a specific product, then pat the skin completely dry before fitting a fresh appliance."},{title:"Check the fit",body:"The opening should follow the size and shape advised by your stoma nurse. Re-measure during recovery because swelling and shape can change."},{title:"Ask for help early",body:"Repeated leaks, persistent itching, soreness, bleeding skin or a suddenly poor fit are useful reasons to contact your stoma care nurse."}] },
+    { title:"Eating and drinking with confidence", category:"Food & hydration", time:"8 min", tone:"peach", intro:"There is no single stoma diet. Your operation, recovery stage and individual care plan matter.", sections:[{title:"Take it steadily",body:"Eat regularly, chew well and introduce foods gradually if that matches the advice you were given after surgery."},{title:"Notice your own pattern",body:"A diary can help connect food, drink and output changes without labelling foods as universally good or bad."},{title:"Stay alert to hydration",body:"Follow the fluid and salt advice given for your stoma type. Contact your clinical team if you are worried about dehydration or a marked change in output."}] },
+    { title:"Getting out and about again", category:"Living well", time:"5 min", tone:"lilac", intro:"Small preparations can make work, exercise, social plans and travel feel more manageable.", sections:[{title:"Create a compact change kit",body:"Pack spare appliances, wipes, disposal bags and any products you normally use. Add spare clothing for longer trips."},{title:"Build movement gradually",body:"Walking and gentle everyday activity can support recovery, but lifting and exercise progression should follow your own surgical or stoma-team advice."},{title:"Plan for confidence",body:"Know where toilets are, keep supplies accessible and use the travel card in Daily Care as a conversation aid rather than formal medical documentation."}] },
   ];
-  return <section className="product-view"><ViewHeading eyebrow="Education · for you" title="Living well, week by week" copy="Clear, trusted guidance that meets you where you are in recovery." />
+  const openGuide = selectedGuide === null ? null : guides[selectedGuide];
+  return <section className="product-view"><ViewHeading eyebrow="Education · for you" title="Living well, week by week" copy={data.content.learningIntro} />
     <div className="learn-hero"><div><span className="eyebrow">Your learning</span><h2>{completed} of 3 guides completed</h2><p>Build confidence at your own pace. Pick up wherever you left off.</p></div><div className="learn-progress"><ProgressRing value={Math.round((completed/3)*100)}/></div></div>
-    <div className="guide-grid">{guides.map((guide,index) => <article className="guide-card" key={guide.title}><span className={`guide-visual ${guide.tone}`}><BookOpen size={28}/></span><div className="guide-card__copy"><span className="eyebrow">{guide.category}</span><h3>{guide.title}</h3><p><Clock3 size={14}/> {guide.time} read</p></div><button className={done[index] ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_guide", index })}>{done[index] ? <><CheckCircle2 size={17}/> Completed</> : <>Mark complete <ChevronRight size={17}/></>}</button></article>)}</div>
+    <div className="guide-grid">{guides.map((guide,index) => <article className="guide-card" key={guide.title}><span className={`guide-visual ${guide.tone}`}><BookOpen size={28}/></span><div className="guide-card__copy"><span className="eyebrow">{guide.category}</span><h3>{guide.title}</h3><p><Clock3 size={14}/> {guide.time} read</p></div><div className="guide-actions"><button onClick={() => setSelectedGuide(index)}>Read guide <ArrowUpRight size={16}/></button><button className={done[index] ? "is-complete" : ""} onClick={() => onAction({ type:"toggle_guide", index })}>{done[index] ? <><CheckCircle2 size={17}/> Completed</> : <><Check size={16}/> Mark complete</>}</button></div></article>)}</div>
     <article className="support-strip"><span><Stethoscope size={25}/></span><div><span className="eyebrow">Need to speak to someone?</span><h3>Colostomy UK Stoma Helpline</h3><p>Open 9am–10pm, 365 days a year</p></div><a href="tel:08003284257">0800 328 4257</a></article>
+    {openGuide && <div className="sheet-backdrop" role="presentation" onMouseDown={() => setSelectedGuide(null)}><article className="guide-reader" role="dialog" aria-modal="true" aria-labelledby="guide-title" onMouseDown={(event) => event.stopPropagation()}><header><div><span className="eyebrow">{openGuide.category} · {openGuide.time}</span><h2 id="guide-title">{openGuide.title}</h2></div><button className="icon-button" onClick={() => setSelectedGuide(null)} aria-label="Close guide"><X size={20}/></button></header><p className="guide-reader__intro">{openGuide.intro}</p>{openGuide.sections.map((section,index) => <section key={section.title}><i>{String(index + 1).padStart(2,"0")}</i><div><h3>{section.title}</h3><p>{section.body}</p></div></section>)}<footer><p><ShieldCheck size={16}/> General education only. Follow advice from your own clinical team.</p><button className="button" onClick={async () => { const guideIndex = selectedGuide ?? 0; if (!done[guideIndex]) await onAction({type:"toggle_guide",index:guideIndex}); setSelectedGuide(null); }}>{done[selectedGuide ?? 0] ? "Close guide" : "Finish and mark complete"}<Check size={17}/></button></footer></article></div>}
   </section>;
 }
 
@@ -657,33 +725,57 @@ function StaffDashboard({ role, view, data, onAction }: { role: Exclude<Role,"Pa
   const isAdmin = role === "Administrator";
   const [messageBody, setMessageBody] = useState("");
   const [sending, setSending] = useState(false);
-  const [contentDraft, setContentDraft] = useState({ homeSubtitle:data.profile.homeSubtitle, checkinHeading:data.profile.checkinHeading });
+  const [contentDraft, setContentDraft] = useState({ homeSubtitle:data.profile.homeSubtitle, checkinHeading:data.profile.checkinHeading, ...data.content });
   const [contentSaved, setContentSaved] = useState(false);
+  const [contentSection, setContentSection] = useState<"app" | "learning" | "product" | "safety">("app");
+  const [contentError, setContentError] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
+  const [dateRange, setDateRange] = useState<"Today" | "7 days" | "All">("Today");
+  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const [threadSearch, setThreadSearch] = useState("");
+  const currentPatientName = `${data.profile.firstName} Doyle`;
+  const [selectedConversation, setSelectedConversation] = useState(currentPatientName);
   const latestCare = data.careLogs[0];
   const careNeedsReview = Boolean(latestCare && (latestCare.leak || latestCare.skinStatus === "sore" || latestCare.skinStatus === "broken" || latestCare.pain >= 7));
   const lowStockItems = data.inventory.filter((item) => item.quantity <= item.reorderAt).length;
   const adminContentCards = [
-    { title:"App copy", copy:"Home prompts, check-in language and guidance", icon:FileText },
-    { title:"Learning articles", copy:"Patient guides and education pathways", icon:BookOpen },
-    { title:"Product helper", copy:"FAQs, suppliers and product guidance", icon:PackageOpen },
-    { title:"Safety content", copy:"Escalation wording and support contacts", icon:ShieldCheck },
+    { id:"app" as const, title:"App copy", copy:"Home prompts and check-in language", icon:FileText },
+    { id:"learning" as const, title:"Learning introduction", copy:"Patient education pathway copy", icon:BookOpen },
+    { id:"product" as const, title:"Product helper", copy:"Inventory and product guidance", icon:PackageOpen },
+    { id:"safety" as const, title:"Safety content", copy:"Escalation and support wording", icon:ShieldCheck },
   ];
   const patients = [
-    { name:`${data.profile.firstName} Doyle`, initials:`${data.profile.firstName.slice(0,1)}D`, status:careNeedsReview?"Review":"Connected", tone:careNeedsReview?"review":"stable", score:latestCare ? `${latestCare.outputMl} ml · ${latestCare.skinStatus} skin` : "Awaiting detailed log", when:"Now", last:"Today" },
-    { name:"Margaret Lewis", initials:"ML", status:"Review", tone:"review", score:"2 areas easing", when:"09:24", last:"Today" },
-    { name:"Peter Walsh", initials:"PW", status:"Stable", tone:"stable", score:"All areas steady", when:"08:51", last:"Today" },
-    { name:"Amira Khan", initials:"AK", status:"New photo", tone:"photo", score:"Photo ready to review", when:"Yesterday", last:"Yesterday" },
-    { name:"David Rose", initials:"DR", status:"No check-in", tone:"missing", score:"3 days since last update", when:"17 Aug", last:"17 Aug" },
-    { name:"Joanne Field", initials:"JF", status:"Improving", tone:"improving", score:"Wellbeing +9%", when:"16 Aug", last:"16 Aug" },
+    { name:currentPatientName, initials:`${data.profile.firstName.slice(0,1)}D`, status:careNeedsReview?"Review":"Connected", tone:careNeedsReview?"review":"stable", score:latestCare ? `${latestCare.outputMl} ml · ${latestCare.skinStatus} skin` : "Awaiting detailed log", when:"Now", last:"Today", daysAgo:0 },
+    { name:"Margaret Lewis", initials:"ML", status:"Review", tone:"review", score:"2 areas easing", when:"09:24", last:"Today", daysAgo:0 },
+    { name:"Peter Walsh", initials:"PW", status:"Stable", tone:"stable", score:"All areas steady", when:"08:51", last:"Today", daysAgo:0 },
+    { name:"Amira Khan", initials:"AK", status:"New photo", tone:"photo", score:"Photo ready to review", when:"Yesterday", last:"Yesterday", daysAgo:1 },
+    { name:"David Rose", initials:"DR", status:"No check-in", tone:"missing", score:"3 days since last update", when:"17 Aug", last:"17 Aug", daysAgo:3 },
+    { name:"Joanne Field", initials:"JF", status:"Improving", tone:"improving", score:"Wellbeing +9%", when:"16 Aug", last:"16 Aug", daysAgo:4 },
   ];
-  const visiblePatients = patients.filter((patient) => patient.name.toLowerCase().includes(patientSearch.toLowerCase()));
-  const saveContent = async () => { await onAction({ type:"update_content", ...contentDraft }); setContentSaved(true); setTimeout(() => setContentSaved(false), 1800); };
-  if (view === "content") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Patient-facing content" copy="Manage the information, learning and product support patients see." action={<button className="button" onClick={saveContent}>{contentSaved ? "Published" : "Publish updates"} <Check size={17}/></button>}/><div className="content-admin-grid">{adminContentCards.map(({title,copy,icon:Icon}) => <button className="admin-content-card" key={title}><span><Icon size={23}/></span><div><strong>{title}</strong><p>{copy}</p></div><ChevronRight size={18}/></button>)}</div><article className="panel editor-preview"><div><span className="eyebrow">Live app copy</span><h2>Home and check-in</h2><label>Home check-in subtitle<textarea value={contentDraft.homeSubtitle} onChange={(event) => setContentDraft((current) => ({...current,homeSubtitle:event.target.value}))}/></label><label>Check-in heading<input value={contentDraft.checkinHeading} onChange={(event) => setContentDraft((current) => ({...current,checkinHeading:event.target.value}))}/></label><button className="button" onClick={saveContent}>{contentSaved ? "Saved" : "Save section"}</button></div><div className="phone-preview"><span className="eyebrow">Patient preview</span><h3>Good evening, {data.profile.firstName}</h3><div><strong>{contentDraft.checkinHeading}</strong><p>{contentDraft.homeSubtitle}</p><button>Start today’s check-in</button></div></div></article></section>;
-  if (view === "supplies") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Supplies overview" copy="Reorder demand across patients, suppliers and products." action={<button className="button button--quiet" onClick={() => downloadFile("supply-requests.csv", `supplier,product,status,date\n${data.supplyRequests.map((item) => `${item.supplier},${item.product},${item.status},${item.createdAt}`).join("\n")}`, "text/csv")}><Download size={17}/> Export</button>}/><div className="staff-stats"><article><PackageOpen size={20}/><div><strong>{data.supplyRequests.length}</strong><small>Open requests</small></div>{data.supplyRequests.length > 0 && <span className="status-pill review">Needs action</span>}</article><article><CheckCircle2 size={20}/><div><strong>42</strong><small>Completed this month</small></div></article><article><Clock3 size={20}/><div><strong>1.4 days</strong><small>Average fulfilment</small></div></article></div><article className="panel supplier-table"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Latest requests</h2></div></div>{data.supplyRequests.length ? data.supplyRequests.map((item,index) => <div className="supplier-row" key={item.id}><strong>{item.supplier}</strong><div className="bar"><i style={{width:`${Math.max(18,100-index*16)}%`}}/></div><b>1</b><span>{item.status}</span></div>) : <p>No requests have been submitted yet.</p>}</article></section>;
+  const visiblePatients = patients.filter((patient) => patient.name.toLowerCase().includes(patientSearch.toLowerCase()) && (dateRange === "All" || patient.daysAgo <= (dateRange === "Today" ? 0 : 7)));
+  const visibleThreads = patients.filter((patient) => patient.name.toLowerCase().includes(threadSearch.toLowerCase()));
+  const activePatient = patients.find((patient) => patient.name === selectedPatient) || null;
+  const activeConversation = patients.find((patient) => patient.name === selectedConversation) || patients[0];
+  const saveContent = async () => { setContentError(""); try { await onAction({ type:"update_content", ...contentDraft }); setContentSaved(true); setTimeout(() => setContentSaved(false), 1800); } catch (caught) { setContentError(caught instanceof Error ? caught.message : "Content could not be saved"); } };
+  const sendStaffMessage = async () => { if (!messageBody.trim() || selectedConversation !== currentPatientName) return; setSending(true); try { await onAction({type:"send_message",body:messageBody,sender:"nurse"}); setMessageBody(""); } finally { setSending(false); } };
+  const nextRange = () => setDateRange((current) => current === "Today" ? "7 days" : current === "7 days" ? "All" : "Today");
+  const supplyStatuses = ["Requested","Approved","Dispatched","Delivered"] as const;
+  if (view === "content") return <section className="product-view staff-view">
+    <ViewHeading eyebrow="Administrator" title="Patient-facing content" copy="Manage the information, learning and product support patients see." action={<button className="button" onClick={saveContent}>{contentSaved ? "Published" : "Publish updates"} <Check size={17}/></button>}/>
+    {contentError && <p className="form-error" role="alert">{contentError}</p>}
+    <div className="content-admin-grid">{adminContentCards.map(({id,title,copy,icon:Icon}) => <button className={`admin-content-card ${contentSection === id ? "is-active" : ""}`} key={id} onClick={() => setContentSection(id)}><span><Icon size={23}/></span><div><strong>{title}</strong><p>{copy}</p></div><ChevronRight size={18}/></button>)}</div>
+    <article className="panel editor-preview"><div><span className="eyebrow">Live app content</span><h2>{adminContentCards.find((card) => card.id === contentSection)?.title}</h2>
+      {contentSection === "app" && <><label>Home check-in subtitle<textarea maxLength={500} value={contentDraft.homeSubtitle} onChange={(event) => setContentDraft((current) => ({...current,homeSubtitle:event.target.value}))}/></label><label>Check-in heading<input maxLength={500} value={contentDraft.checkinHeading} onChange={(event) => setContentDraft((current) => ({...current,checkinHeading:event.target.value}))}/></label></>}
+      {contentSection === "learning" && <label>Learning introduction<textarea maxLength={500} value={contentDraft.learningIntro} onChange={(event) => setContentDraft((current) => ({...current,learningIntro:event.target.value}))}/></label>}
+      {contentSection === "product" && <label>Product support introduction<textarea maxLength={500} value={contentDraft.productHelp} onChange={(event) => setContentDraft((current) => ({...current,productHelp:event.target.value}))}/></label>}
+      {contentSection === "safety" && <label>Safety message<textarea maxLength={500} value={contentDraft.safetyMessage} onChange={(event) => setContentDraft((current) => ({...current,safetyMessage:event.target.value}))}/></label>}
+      <button className="button" onClick={saveContent}>{contentSaved ? "Saved" : "Save section"}</button>
+    </div><div className="phone-preview"><span className="eyebrow">Patient preview</span><h3>Good evening, {data.profile.firstName}</h3><div><strong>{contentSection === "app" ? contentDraft.checkinHeading : contentSection === "learning" ? "Living well, week by week" : contentSection === "product" ? "Your supplies" : "Know when to get help"}</strong><p>{contentSection === "app" ? contentDraft.homeSubtitle : contentSection === "learning" ? contentDraft.learningIntro : contentSection === "product" ? contentDraft.productHelp : contentDraft.safetyMessage}</p><span className="preview-button">Preview content</span></div></div></article>
+  </section>;
+  if (view === "supplies") return <section className="product-view staff-view"><ViewHeading eyebrow="Administrator" title="Supplies overview" copy="Reorder demand across patients, suppliers and products." action={<button className="button button--quiet" onClick={() => downloadFile("supply-requests.csv", `supplier,product,status,date\n${data.supplyRequests.map((item) => `${item.supplier},${item.product},${item.status},${item.createdAt}`).join("\n")}`, "text/csv")}><Download size={17}/> Export</button>}/><div className="staff-stats"><article><PackageOpen size={20}/><div><strong>{data.supplyRequests.filter((item) => item.status !== "Delivered").length}</strong><small>Open requests</small></div>{data.supplyRequests.some((item) => item.status !== "Delivered") && <span className="status-pill review">Needs action</span>}</article><article><CheckCircle2 size={20}/><div><strong>{42 + data.supplyRequests.filter((item) => item.status === "Delivered").length}</strong><small>Completed this month</small></div></article><article><Clock3 size={20}/><div><strong>1.4 days</strong><small>Average fulfilment</small></div></article></div><article className="panel supplier-table"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Latest requests</h2></div><small>Choose a status to advance fulfilment</small></div>{data.supplyRequests.length ? data.supplyRequests.map((item,index) => { const statusIndex = supplyStatuses.indexOf(item.status as typeof supplyStatuses[number]); const nextStatus = supplyStatuses[Math.min(supplyStatuses.length - 1, statusIndex + 1)]; return <div className="supplier-row" key={item.id}><strong>{item.supplier}<small>{item.product}</small></strong><div className="bar"><i style={{width:`${Math.max(18,100-index*16)}%`}}/></div><b>1</b><button className={`status-pill ${item.status === "Delivered" ? "stable" : "review"}`} disabled={item.status === "Delivered"} onClick={() => onAction({type:"update_supply_status",id:item.id,status:nextStatus})}>{item.status === "Delivered" ? "Delivered" : `${item.status} → ${nextStatus}`}</button></div>}) : <p>No requests have been submitted yet.</p>}</article></section>;
   if (view === "reports") return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Reports & audit" copy="Caseload activity for monitoring, handover and record-keeping—not diagnosis." action={<button className="button" onClick={() => downloadFile("care-team-report.csv", `date,wellbeing_output,skin,comfort,mood,detailed_output_ml,consistency,hydration_ml,skin_observation,pain,leak\n${data.checkins.map((item,index) => { const care=data.careLogs[index]; return `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood},${care?.outputMl||""},${care?.consistency||""},${care?.hydrationMl||""},${care?.skinStatus||""},${care?.pain||""},${care?.leak||false}` }).join("\n")}`, "text/csv")}><Download size={17}/> Export care record</button>}/><div className="staff-stats"><article><ClipboardCheck size={20}/><div><strong>{data.checkins.length}</strong><small>Wellbeing check-ins</small></div></article><article><Droplets size={20}/><div><strong>{data.careLogs.length}</strong><small>Detailed care logs</small></div></article><article><AlertCircle size={20}/><div><strong>{careNeedsReview ? 1 : 0}</strong><small>Patient-reported review signals</small></div>{careNeedsReview && <span className="status-pill review">Review</span>}</article><article><PackageOpen size={20}/><div><strong>{lowStockItems}</strong><small>Low-stock products</small></div></article></div><div className="reports-grid"><article className="panel report-bars"><div className="panel-heading"><div><span className="eyebrow">Recent check-ins</span><h2>Wellbeing activity</h2></div></div>{data.checkins.slice(0,7).reverse().map((item,index) => <span key={item.id}><i style={{height:`${wellbeing([item])}%`}}/><small>{new Date(item.createdAt).toLocaleDateString("en-GB",{weekday:"narrow"}) || index}</small></span>)}</article><article className="panel audit-list"><div className="panel-heading"><div><span className="eyebrow">Patient status</span><h2>At a glance</h2></div></div>{[["Latest wellbeing",wellbeing(data.checkins),"stable"],["Detailed care logs",data.careLogs.length,careNeedsReview?"review":"stable"],["Diary entries",data.diaryEntries.length,"photo"],["Messages",data.messages.length,"missing"]].map(([label,count,tone]) => <div key={String(label)}><span className={`status-dot ${tone}`}/><strong>{label}</strong><b>{count}</b></div>)}</article></div></section>;
-  if (view === "messages") return <section className="product-view staff-view"><ViewHeading eyebrow="Care team" title="Patient conversations" copy="Secure messages between patients and their stoma care team."/><div className="messages-layout"><article className="panel thread-list"><label className="search-box"><Search size={17}/><input placeholder="Search conversations…"/></label><button className="is-active"><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><span><strong>{data.profile.firstName} Doyle</strong><small>{data.messages.at(-1)?.body || "No messages yet"}</small></span><b>Now</b></button>{patients.slice(0,3).map((patient) => <button key={patient.name}><span className="patient-avatar">{patient.initials}</span><span><strong>{patient.name}</strong><small>Demo conversation</small></span><b>{patient.when}</b></button>)}</article><article className="panel conversation"><header><span className="patient-avatar">{data.profile.firstName.slice(0,1)}D</span><div><strong>{data.profile.firstName} Doyle</strong><small><i/> Demo workspace</small></div><span className="status-pill stable">Connected</span></header><div className="messages">{data.messages.map((message) => <div className={`message ${message.sender}`} key={message.id}><p>{message.body}</p><span>{new Date(message.createdAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span></div>)}</div><div className="composer"><input value={messageBody} onChange={(event) => setMessageBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && messageBody.trim()) event.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent("click",{bubbles:true})); }} placeholder={`Reply to ${data.profile.firstName}…`}/><button disabled={sending || !messageBody.trim()} onClick={async () => { setSending(true); try { await onAction({type:"send_message",body:messageBody,sender:"nurse"}); setMessageBody(""); } finally { setSending(false); } }} aria-label="Send message"><ArrowRight size={19}/></button></div></article></div></section>;
-  return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Today’s caseload" copy="Patient-reported information for review and follow-up—not diagnosis."/><div className="staff-stats"><article><UsersRound size={20}/><div><strong>31</strong><small>Patients</small></div></article><article><AlertCircle size={20}/><div><strong>{3 + Number(careNeedsReview)}</strong><small>Need review</small></div><span className="status-pill review">Review</span></article><article><ClipboardCheck size={20}/><div><strong>{data.careLogs.length}</strong><small>Detailed care logs</small></div></article><article><PackageOpen size={20}/><div><strong>{lowStockItems}</strong><small>Supply alerts</small></div></article></div><article className="panel caseload-panel"><div className="caseload-tools"><label className="search-box"><Search size={17}/><input value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="Search by patient name…"/></label><button><CalendarDays size={17}/> Today <ChevronDown size={16}/></button></div><div className="patient-table"><div className="table-head"><span>Patient</span><span>Status</span><span>Latest signal</span><span>Last check-in</span><span/></div>{visiblePatients.map(patient => <button className="patient-row" key={patient.name}><span className="patient-name"><i className="patient-avatar">{patient.initials}</i><span><strong>{patient.name}</strong><small>Patient since Mar 2026</small></span></span><span><i className={`status-pill ${patient.tone}`}>{patient.status}</i></span><span>{patient.score}</span><span>{patient.last}</span><ChevronRight size={18}/></button>)}</div></article></section>;
+  if (view === "messages") return <section className="product-view staff-view"><ViewHeading eyebrow="Care team" title="Patient conversations" copy="Secure messages between patients and their stoma care team."/><div className="messages-layout"><article className="panel thread-list"><label className="search-box"><Search size={17}/><input value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search conversations…"/></label>{visibleThreads.map((patient) => <button className={selectedConversation === patient.name ? "is-active" : ""} onClick={() => { setSelectedConversation(patient.name); setMessageBody(""); }} key={patient.name}><span className="patient-avatar">{patient.initials}</span><span><strong>{patient.name}</strong><small>{patient.name === currentPatientName ? data.messages.at(-1)?.body || "No messages yet" : "Demo conversation"}</small></span><b>{patient.when}</b></button>)}</article><article className="panel conversation"><header><span className="patient-avatar">{activeConversation.initials}</span><div><strong>{activeConversation.name}</strong><small><i/> {activeConversation.name === currentPatientName ? "Saved demo workspace" : "Read-only sample patient"}</small></div><span className={`status-pill ${activeConversation.tone}`}>{activeConversation.status}</span></header><div className="messages">{activeConversation.name === currentPatientName ? data.messages.map((message) => <div className={`message ${message.sender}`} key={message.id}><p>{message.body}</p><span>{new Date(message.createdAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span></div>) : <><div className="message patient"><p>Thank you. I completed my check-in this morning.</p><span>{activeConversation.when}</span></div><p className="conversation-note"><ShieldCheck size={16}/> Sample caseload records are read-only. Select {currentPatientName} to send and save a message.</p></>}</div>{activeConversation.name === currentPatientName ? <div className="composer"><input value={messageBody} onChange={(event) => setMessageBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void sendStaffMessage(); }} placeholder={`Reply to ${data.profile.firstName}…`}/><button disabled={sending || !messageBody.trim()} onClick={sendStaffMessage} aria-label="Send message"><ArrowRight size={19}/></button></div> : <button className="button button--quiet conversation-return" onClick={() => setSelectedConversation(currentPatientName)}>Open saved conversation</button>}</article></div></section>;
+  return <section className="product-view staff-view"><ViewHeading eyebrow={isAdmin?"Administrator":"Nurse portal"} title="Today’s caseload" copy="Patient-reported information for review and follow-up—not diagnosis."/><div className="staff-stats"><article><UsersRound size={20}/><div><strong>31</strong><small>Patients</small></div></article><article><AlertCircle size={20}/><div><strong>{3 + Number(careNeedsReview)}</strong><small>Need review</small></div><span className="status-pill review">Review</span></article><article><ClipboardCheck size={20}/><div><strong>{data.careLogs.length}</strong><small>Detailed care logs</small></div></article><article><PackageOpen size={20}/><div><strong>{lowStockItems}</strong><small>Supply alerts</small></div></article></div><article className="panel caseload-panel"><div className="caseload-tools"><label className="search-box"><Search size={17}/><input value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="Search by patient name…"/></label><button onClick={nextRange} aria-label="Change activity date range"><CalendarDays size={17}/> {dateRange} <ChevronDown size={16}/></button></div><div className="patient-table"><div className="table-head"><span>Patient</span><span>Status</span><span>Latest signal</span><span>Last check-in</span><span/></div>{visiblePatients.length ? visiblePatients.map(patient => <button className={`patient-row ${selectedPatient === patient.name ? "is-selected" : ""}`} aria-expanded={selectedPatient === patient.name} onClick={() => setSelectedPatient(patient.name)} key={patient.name}><span className="patient-name"><i className="patient-avatar">{patient.initials}</i><span><strong>{patient.name}</strong><small>Patient since Mar 2026</small></span></span><span><i className={`status-pill ${patient.tone}`}>{patient.status}</i></span><span>{patient.score}</span><span>{patient.last}</span><ChevronRight size={18}/></button>) : <p className="empty-state">No patients match this search and date range.</p>}</div></article>{activePatient && <article className="panel patient-detail"><header><div><span className="patient-avatar">{activePatient.initials}</span><div><span className="eyebrow">Patient overview</span><h2>{activePatient.name}</h2></div></div><button className="icon-button" onClick={() => setSelectedPatient(null)} aria-label="Close patient overview"><X size={19}/></button></header><div className="patient-detail__stats"><div><small>Status</small><strong>{activePatient.status}</strong></div><div><small>Latest signal</small><strong>{activePatient.score}</strong></div><div><small>Last check-in</small><strong>{activePatient.last}</strong></div></div>{activePatient.name === currentPatientName ? <div className="patient-detail__record"><p><Droplets size={17}/> {latestCare ? `${latestCare.outputMl} ml output · ${latestCare.consistency}` : "No detailed output yet"}</p><p><GlassWater size={17}/> {latestCare ? `${latestCare.hydrationMl} ml fluids · pain ${latestCare.pain}/10` : "No hydration record yet"}</p><p><BookOpen size={17}/> {data.diaryEntries.length} diary entries · {data.messages.length} messages</p><span className="status-pill stable">Live saved workspace</span></div> : <p className="conversation-note"><ShieldCheck size={16}/> This is a read-only sample caseload record. Live saved activity is available for {currentPatientName}.</p>}</article>}</section>;
 }
 
 export default function StomaAlertApp() {
@@ -748,7 +840,7 @@ export default function StomaAlertApp() {
     {id:"caseload" as const,label:"Patients",icon:UsersRound}, {id:"messages" as const,label:"Messages",icon:MessageCircle},
     {id:"reports" as const,label:"Reports",icon:FileText}, ...(role === "Administrator" ? [{id:"supplies" as const,label:"Supplies",icon:PackageOpen},{id:"content" as const,label:"Content",icon:Settings2}] : []),
   ];
-  const patientContent = view === "home" ? <PatientHome data={data} syncState={syncState} onCheckIn={() => setCheckInOpen(true)} onMessage={() => setMessageOpen(true)} onNavigate={setView} /> : view === "care" ? <CareView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} onNavigate={setView}/> : view === "diary" ? <DiaryView data={data} onCheckIn={() => setCheckInOpen(true)} onUpload={uploadPhoto} /> : view === "progress" ? <ProgressView data={data} /> : view === "supplies" ? <SuppliesView data={data} onAction={performAction} /> : view === "learn" ? <LearnView data={data} onAction={performAction} /> : <ProfileView data={data} onAction={performAction} />;
+  const patientContent = view === "home" ? <PatientHome data={data} syncState={syncState} onCheckIn={() => setCheckInOpen(true)} onMessage={() => setMessageOpen(true)} onNavigate={setView} /> : view === "care" ? <CareView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} onNavigate={setView}/> : view === "diary" ? <DiaryView data={data} onCheckIn={() => setCheckInOpen(true)} onUpload={uploadPhoto} onAction={performAction} /> : view === "progress" ? <ProgressView data={data} /> : view === "supplies" ? <SuppliesView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} /> : view === "learn" ? <LearnView data={data} onAction={performAction} /> : <ProfileView data={data} onAction={performAction} />;
 
   return (
     <div className="site-shell">

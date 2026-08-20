@@ -1,4 +1,4 @@
-import type { AppAction, AppData, CareLogData, CareTaskData, CheckInData, DiaryEntryData, InventoryItemData, MessageData, ProfileData, SupplyRequestData } from "@/lib/app-types";
+import type { AppAction, AppData, CareLogData, CareTaskData, CheckInData, ContentSettingsData, DiaryEntryData, InventoryItemData, MessageData, ProfileData, SupplyRequestData } from "@/lib/app-types";
 
 type RunResult<T = unknown> = { results?: T[] };
 type Statement = {
@@ -40,16 +40,18 @@ export async function ensureAppData(owner: string) {
     db.prepare("CREATE INDEX IF NOT EXISTS inventory_owner_idx ON inventory_items (owner)"),
     db.prepare("CREATE TABLE IF NOT EXISTS care_tasks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, category TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, due_date TEXT NOT NULL, completed INTEGER NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS care_tasks_owner_due_idx ON care_tasks (owner, due_date)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS content_settings (owner TEXT PRIMARY KEY, learning_intro TEXT NOT NULL, product_help TEXT NOT NULL, safety_message TEXT NOT NULL, updated_at TEXT NOT NULL)"),
   ]);
 
   const existing = await db.prepare("SELECT owner FROM profiles WHERE owner = ?").bind(owner).first();
   const now = new Date();
   const iso = (daysAgo: number, hours: number) => new Date(now.getTime() - daysAgo * 86400000 - hours * 3600000).toISOString();
   if (existing) {
-    const [careCount, inventoryCount, taskCount] = await Promise.all([
+    const [careCount, inventoryCount, taskCount, contentRow] = await Promise.all([
       db.prepare("SELECT COUNT(*) AS count FROM care_logs WHERE owner = ?").bind(owner).first<{ count: number }>(),
       db.prepare("SELECT COUNT(*) AS count FROM inventory_items WHERE owner = ?").bind(owner).first<{ count: number }>(),
       db.prepare("SELECT COUNT(*) AS count FROM care_tasks WHERE owner = ?").bind(owner).first<{ count: number }>(),
+      db.prepare("SELECT owner FROM content_settings WHERE owner = ?").bind(owner).first(),
     ]);
     const statements: Statement[] = [];
     if (!Number(careCount?.count)) {
@@ -69,6 +71,9 @@ export async function ensureAppData(owner: string) {
         db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, "travel", "Prepare an emergency change kit", "Pouches, wipes, disposal bags and spare clothes", iso(-12, 0).slice(0, 10), 0),
         db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, "recovery", "Gentle movement goal", "A short walk if your care team has confirmed it is suitable", iso(-2, 0).slice(0, 10), 1),
       );
+    }
+    if (!contentRow) {
+      statements.push(db.prepare("INSERT INTO content_settings (owner, learning_intro, product_help, safety_message, updated_at) VALUES (?, ?, ?, ?, ?)").bind(owner, "Clear, trusted guidance that meets you where you are in recovery.", "Track what you have at home, prevent shortages and contact your care team when a product is not working well.", "Use your individual care plan. New, worsening or concerning symptoms should be discussed with your stoma care team.", now.toISOString()));
     }
     if (statements.length) await db.batch(statements);
     return;
@@ -93,6 +98,7 @@ export async function ensureAppData(owner: string) {
     db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, "appointment", "Video review with Sarah", "Bring your care summary and product questions", iso(-6, 0).slice(0, 10), 0),
     db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, "travel", "Prepare an emergency change kit", "Pouches, wipes, disposal bags and spare clothes", iso(-12, 0).slice(0, 10), 0),
     db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, "recovery", "Gentle movement goal", "A short walk if your care team has confirmed it is suitable", iso(-2, 0).slice(0, 10), 1),
+    db.prepare("INSERT INTO content_settings (owner, learning_intro, product_help, safety_message, updated_at) VALUES (?, ?, ?, ?, ?)").bind(owner, "Clear, trusted guidance that meets you where you are in recovery.", "Track what you have at home, prevent shortages and contact your care team when a product is not working well.", "Use your individual care plan. New, worsening or concerning symptoms should be discussed with your stoma care team.", now.toISOString()),
   ]);
 }
 
@@ -103,7 +109,7 @@ function parseList<T>(value: unknown, fallback: T): T {
 export async function readAppData(owner: string): Promise<AppData> {
   await ensureAppData(owner);
   const db = await database();
-  const [profileRow, checkinsRows, diaryRows, supplyRows, messageRows, careLogRows, inventoryRows, taskRows] = await Promise.all([
+  const [profileRow, checkinsRows, diaryRows, supplyRows, messageRows, careLogRows, inventoryRows, taskRows, contentRow] = await Promise.all([
     db.prepare("SELECT * FROM profiles WHERE owner = ?").bind(owner).first<Record<string, unknown>>(),
     db.prepare("SELECT id, output, skin, comfort, mood, created_at AS createdAt FROM checkins WHERE owner = ? ORDER BY created_at DESC LIMIT 90").bind(owner).all<CheckInData>(),
     db.prepare("SELECT id, type, title, detail, file_key AS fileKey, file_name AS fileName, created_at AS createdAt FROM diary_entries WHERE owner = ? ORDER BY created_at DESC LIMIT 100").bind(owner).all<DiaryEntryData>(),
@@ -112,13 +118,15 @@ export async function readAppData(owner: string): Promise<AppData> {
     db.prepare("SELECT id, output_ml AS outputMl, consistency, hydration_ml AS hydrationMl, skin_status AS skinStatus, pain, leak, pouch_changed AS pouchChanged, food, symptoms, created_at AS createdAt FROM care_logs WHERE owner = ? ORDER BY created_at DESC LIMIT 90").bind(owner).all<CareLogData>(),
     db.prepare("SELECT id, name, product_code AS productCode, quantity, reorder_at AS reorderAt, unit FROM inventory_items WHERE owner = ? ORDER BY name").bind(owner).all<InventoryItemData>(),
     db.prepare("SELECT id, category, title, detail, due_date AS dueDate, completed FROM care_tasks WHERE owner = ? ORDER BY completed, due_date").bind(owner).all<CareTaskData>(),
+    db.prepare("SELECT learning_intro AS learningIntro, product_help AS productHelp, safety_message AS safetyMessage FROM content_settings WHERE owner = ?").bind(owner).first<ContentSettingsData>(),
   ]);
   if (!profileRow) throw new Error("Profile could not be loaded");
   const profile: ProfileData = {
     firstName: String(profileRow.first_name), email: String(profileRow.email), stomaType: String(profileRow.stoma_type), duration: String(profileRow.duration), dateCreated: String(profileRow.date_created), nurse: String(profileRow.nurse), supplier: String(profileRow.supplier),
     products: parseList<string[]>(profileRow.products, []), learning: parseList<boolean[]>(profileRow.learning, [false, false, false]), homeSubtitle: String(profileRow.home_subtitle), checkinHeading: String(profileRow.checkin_heading),
   };
-  return { profile, checkins: checkinsRows.results || [], diaryEntries: diaryRows.results || [], supplyRequests: supplyRows.results || [], messages: messageRows.results || [], careLogs: (careLogRows.results || []).map((log) => ({ ...log, leak: Boolean(log.leak), pouchChanged: Boolean(log.pouchChanged) })), inventory: inventoryRows.results || [], careTasks: (taskRows.results || []).map((task) => ({ ...task, completed: Boolean(task.completed) })) };
+  if (!contentRow) throw new Error("Content settings could not be loaded");
+  return { profile, checkins: checkinsRows.results || [], diaryEntries: diaryRows.results || [], supplyRequests: supplyRows.results || [], messages: messageRows.results || [], careLogs: (careLogRows.results || []).map((log) => ({ ...log, leak: Boolean(log.leak), pouchChanged: Boolean(log.pouchChanged) })), inventory: inventoryRows.results || [], careTasks: (taskRows.results || []).map((task) => ({ ...task, completed: Boolean(task.completed) })), content: contentRow };
 }
 
 export async function applyAppAction(owner: string, action: AppAction) {
@@ -139,11 +147,19 @@ export async function applyAppAction(owner: string, action: AppAction) {
       .bind(profile.firstName, profile.email, profile.stomaType, profile.duration, profile.dateCreated, profile.nurse, profile.supplier, JSON.stringify(profile.products), JSON.stringify(profile.learning), profile.homeSubtitle, profile.checkinHeading, now, owner).run();
   } else if (action.type === "request_supplies") {
     const supplier = action.supplier.trim();
+    const product = action.product?.trim() || "Drainable pouch · 60mm";
     if (!supplier) throw new Error("Choose a supplier");
+    if (product.length > 160) throw new Error("Product description is too long");
     await db.batch([
-      db.prepare("INSERT INTO supply_requests (id, owner, supplier, product, status, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, supplier, "Drainable pouch · 60mm", "Requested", now),
+      db.prepare("INSERT INTO supply_requests (id, owner, supplier, product, status, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, supplier, product, "Requested", now),
       db.prepare("UPDATE profiles SET supplier = ?, updated_at = ? WHERE owner = ?").bind(supplier, now, owner),
     ]);
+  } else if (action.type === "update_supply_status") {
+    const statuses = ["Requested", "Approved", "Dispatched", "Delivered"];
+    if (!statuses.includes(action.status)) throw new Error("Supply status is not valid");
+    const request = await db.prepare("SELECT id FROM supply_requests WHERE id = ? AND owner = ?").bind(action.id, owner).first();
+    if (!request) throw new Error("Supply request not found");
+    await db.prepare("UPDATE supply_requests SET status = ? WHERE id = ? AND owner = ?").bind(action.status, action.id, owner).run();
   } else if (action.type === "toggle_guide") {
     const current = await readAppData(owner);
     const learning = [...current.profile.learning];
@@ -154,6 +170,13 @@ export async function applyAppAction(owner: string, action: AppAction) {
     const body = action.body.trim();
     if (!body || body.length > 1000) throw new Error("Enter a message up to 1,000 characters");
     await db.prepare("INSERT INTO messages (id, owner, sender, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), owner, action.sender, body, now).run();
+  } else if (action.type === "add_diary_note") {
+    const title = action.title.trim();
+    const detail = action.detail.trim();
+    if (!title || title.length > 80) throw new Error("Enter a note title up to 80 characters");
+    if (!detail || detail.length > 1000) throw new Error("Enter a note up to 1,000 characters");
+    await db.prepare("INSERT INTO diary_entries (id, owner, type, title, detail, file_key, file_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), owner, "note", title, detail, null, null, now).run();
   } else if (action.type === "save_care_log") {
     const log = action.log;
     if (!Number.isInteger(log.outputMl) || log.outputMl < 0 || log.outputMl > 10000) throw new Error("Enter an output amount between 0 and 10,000 ml");
@@ -170,12 +193,46 @@ export async function applyAppAction(owner: string, action: AppAction) {
     const item = await db.prepare("SELECT quantity FROM inventory_items WHERE id = ? AND owner = ?").bind(action.id, owner).first<{ quantity: number }>();
     if (!item) throw new Error("Supply item not found");
     await db.prepare("UPDATE inventory_items SET quantity = ? WHERE id = ? AND owner = ?").bind(Math.max(0, Number(item.quantity) + action.change), action.id, owner).run();
+  } else if (action.type === "add_inventory_item") {
+    const item = action.item;
+    const name = item.name.trim();
+    const productCode = item.productCode.trim();
+    const unit = item.unit.trim();
+    if (!name || name.length > 100) throw new Error("Enter a product name up to 100 characters");
+    if (!productCode || productCode.length > 40) throw new Error("Enter a product code up to 40 characters");
+    if (!unit || unit.length > 30) throw new Error("Enter a unit up to 30 characters");
+    if (!Number.isInteger(item.quantity) || item.quantity < 0 || item.quantity > 999) throw new Error("Quantity must be between 0 and 999");
+    if (!Number.isInteger(item.reorderAt) || item.reorderAt < 0 || item.reorderAt > 999) throw new Error("Reorder level must be between 0 and 999");
+    await db.prepare("INSERT INTO inventory_items (id, owner, name, product_code, quantity, reorder_at, unit) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), owner, name, productCode, item.quantity, item.reorderAt, unit).run();
+  } else if (action.type === "remove_inventory_item") {
+    const item = await db.prepare("SELECT id FROM inventory_items WHERE id = ? AND owner = ?").bind(action.id, owner).first();
+    if (!item) throw new Error("Supply item not found");
+    await db.prepare("DELETE FROM inventory_items WHERE id = ? AND owner = ?").bind(action.id, owner).run();
   } else if (action.type === "toggle_care_task") {
     const task = await db.prepare("SELECT completed FROM care_tasks WHERE id = ? AND owner = ?").bind(action.id, owner).first<{ completed: number }>();
     if (!task) throw new Error("Care task not found");
     await db.prepare("UPDATE care_tasks SET completed = ? WHERE id = ? AND owner = ?").bind(task.completed ? 0 : 1, action.id, owner).run();
+  } else if (action.type === "add_care_task") {
+    const task = action.task;
+    const categories = ["routine", "appointment", "travel", "recovery"];
+    if (!categories.includes(task.category)) throw new Error("Care task category is not valid");
+    if (!task.title.trim() || task.title.trim().length > 100) throw new Error("Enter a task title up to 100 characters");
+    if (!task.detail.trim() || task.detail.trim().length > 300) throw new Error("Enter task details up to 300 characters");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)) throw new Error("Choose a due date");
+    await db.prepare("INSERT INTO care_tasks (id, owner, category, title, detail, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), owner, task.category, task.title.trim(), task.detail.trim(), task.dueDate, 0).run();
+  } else if (action.type === "remove_care_task") {
+    const task = await db.prepare("SELECT id FROM care_tasks WHERE id = ? AND owner = ?").bind(action.id, owner).first();
+    if (!task) throw new Error("Care task not found");
+    await db.prepare("DELETE FROM care_tasks WHERE id = ? AND owner = ?").bind(action.id, owner).run();
   } else if (action.type === "update_content") {
-    await db.prepare("UPDATE profiles SET home_subtitle = ?, checkin_heading = ?, updated_at = ? WHERE owner = ?").bind(action.homeSubtitle.trim(), action.checkinHeading.trim(), now, owner).run();
+    const values = [action.homeSubtitle, action.checkinHeading, action.learningIntro, action.productHelp, action.safetyMessage].map((value) => value.trim());
+    if (values.some((value) => !value || value.length > 500)) throw new Error("Content fields are required and must be under 500 characters");
+    await db.batch([
+      db.prepare("UPDATE profiles SET home_subtitle = ?, checkin_heading = ?, updated_at = ? WHERE owner = ?").bind(values[0], values[1], now, owner),
+      db.prepare("UPDATE content_settings SET learning_intro = ?, product_help = ?, safety_message = ?, updated_at = ? WHERE owner = ?").bind(values[2], values[3], values[4], now, owner),
+    ]);
   }
   return readAppData(owner);
 }
