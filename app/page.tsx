@@ -233,6 +233,25 @@ function wellbeing(checkins: AppData["checkins"]) {
   return Math.round(((latest.output + latest.skin + latest.comfort + latest.mood) / 20) * 100);
 }
 
+function checkinWellbeing(checkin: AppData["checkins"][number]) {
+  return Math.round(((checkin.output + checkin.skin + checkin.comfort + checkin.mood) / 20) * 100);
+}
+
+function trendGeometry(checkins: AppData["checkins"], width: number, height: number, padding = 10) {
+  const entries = (checkins.length ? checkins : fallbackData.checkins).slice(0, 10).reverse();
+  const drawableWidth = width - padding * 2;
+  const drawableHeight = height - padding * 2;
+  const points = entries.map((entry, index) => {
+    const x = entries.length === 1 ? width / 2 : padding + (index / (entries.length - 1)) * drawableWidth;
+    const y = padding + ((100 - checkinWellbeing(entry)) / 100) * drawableHeight;
+    return { x, y, score: checkinWellbeing(entry), entry };
+  });
+  const line = points.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${padding},${height - padding} ${line} ${width - padding},${height - padding}`;
+  const change = (points.at(-1)?.score || 0) - (points[0]?.score || 0);
+  return { entries, points, line, area, change };
+}
+
 function formatEntryDate(value: string) {
   const date = new Date(value);
   const today = new Date();
@@ -337,6 +356,8 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
   const score = wellbeing(data.checkins);
   const workspaceDate = new Date(latest.createdAt);
   const journeyDay = Math.max(1, Math.floor((workspaceDate.getTime() - new Date(data.profile.dateCreated).getTime()) / 86400000));
+  const homeTrend = trendGeometry(data.checkins, 520, 154, 8);
+  const latestHomePoint = homeTrend.points.at(-1);
   const recoveryFlow = [
     { label: "Check-in", detail: `${data.checkins.length} wellbeing updates captured`, meta: data.checkins.length ? formatEntryDate(data.checkins[0].createdAt).day : "Ready", icon: ClipboardCheck },
     { label: "Diary", detail: `${data.diaryEntries.length} timeline entries securely stored`, meta: `${data.diaryEntries.filter((entry) => entry.type === "photo").length} photos`, icon: Camera },
@@ -361,7 +382,7 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
         </header>
 
         <section className="mobile-status-card">
-          <header><span><i/> Today’s recovery signal</span><small className={`sync-state sync-state--${syncState}`}>{syncState === "saving" ? "Saving…" : syncState === "loading" ? "Connecting…" : "Up to date"}</small></header>
+          <header><span><i/> Your check-in is ready</span><small className={`sync-state sync-state--${syncState}`}>{syncState === "saving" ? "Saving…" : syncState === "loading" ? "Connecting…" : "Up to date"}</small></header>
           <div className="mobile-status-card__body">
             <div><span className="mobile-overline">60-second check-in</span><h2>{data.profile.checkinHeading}</h2><p>{data.profile.homeSubtitle}</p></div>
             <ProgressRing value={score}/>
@@ -371,6 +392,11 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
 
         <section className="mobile-vitals" aria-label="Latest wellbeing ratings">
           {mobileVitals.map(({label,value,icon:Icon,copy}) => <article key={label}><span><Icon size={18}/></span><div><small>{label}</small><strong>{value}/5</strong><p>{copy}</p></div></article>)}
+        </section>
+
+        <section className="mobile-pattern-card">
+          <div><span>Your recent pattern</span><strong>{homeTrend.change >= 0 ? "You’re moving forward" : "A change worth noticing"}</strong><p>{homeTrend.change >= 0 ? "Your check-ins are building a useful picture of recovery." : "Keep checking in and share anything concerning with your care team."}</p></div>
+          <svg viewBox="0 0 180 74" role="img" aria-label={`Wellbeing changed by ${homeTrend.change} percentage points`}><polyline points={trendGeometry(data.checkins, 180, 74, 6).line} fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </section>
 
         <div className="mobile-section-title"><div><span>Your day</span><h2>What would you like to do?</h2></div><button onClick={() => onNavigate("progress")}>Progress <ArrowUpRight size={15}/></button></div>
@@ -396,7 +422,7 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
 
       <section className="award-hero">
         <div className="award-hero__copy">
-          <span className="calm-status"><i /> Recovery signal online</span>
+          <span className="calm-status"><i /> Your check-in is ready</span>
           <h1>Recovery,<br/><em>clearly connected.</em></h1>
           <p>{data.profile.homeSubtitle}</p>
           <div className="award-hero__actions">
@@ -407,7 +433,7 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
         </div>
 
         <div className="recovery-console" aria-label="Interactive recovery flow">
-          <header className="console-head"><div><span>LIVE RECOVERY FLOW</span><small>STOMA ALERT / PATIENT 0067</small></div><b><i/> CONNECTED</b></header>
+          <header className="console-head"><div><span>YOUR RECOVERY JOURNEY</span><small>PRIVATE PATIENT WORKSPACE</small></div><b><i/> CONNECTED</b></header>
           <div className="console-flow" role="tablist" aria-label="Recovery stages">
             {recoveryFlow.map((stage, index) => {
               const StageIcon = stage.icon;
@@ -434,17 +460,17 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
         </div>
       </section>
 
-      <section className="home-section-head"><div><span className="eyebrow">Recovery intelligence</span><h2>The signal behind your story.</h2></div><button onClick={() => onNavigate("diary")}>Open your diary <ArrowUpRight size={16}/></button></section>
+      <section className="home-section-head"><div><span className="eyebrow">Your recent pattern</span><h2>Your progress, one day at a time.</h2></div><button onClick={() => onNavigate("diary")}>Open your diary <ArrowUpRight size={16}/></button></section>
 
       <section className="home-bento">
         <article className="journey-card">
-          <div className="bento-head"><div><span className="eyebrow">Recovery signal</span><h3>Gently moving forward</h3></div><span className="signal-pill"><TrendingUp size={14}/> +6%</span></div>
-          <p>Your comfort and confidence have improved across the last five check-ins.</p>
-          <div className="signal-chart" aria-label="Wellbeing trend improving over five check-ins">
+          <div className="bento-head"><div><span className="eyebrow">This week</span><h3>{homeTrend.change >= 0 ? "Gently moving forward" : "Your pattern has changed"}</h3></div><span className="signal-pill"><TrendingUp size={14}/> {homeTrend.change >= 0 ? "+" : ""}{homeTrend.change}%</span></div>
+          <p>{homeTrend.change >= 0 ? "Your comfort and confidence are building across your recent check-ins." : "Your latest check-in is lower than the start of this view. Keep a note of anything that feels different."}</p>
+          <div className="signal-chart" aria-label={`Wellbeing trend across ${homeTrend.entries.length} check-ins`}>
             <span className="signal-grid" />
-            <svg viewBox="0 0 520 154" role="img"><defs><linearGradient id="home-signal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".32"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><path d="M4 127 C70 118 93 132 148 105 S228 93 278 101 S366 70 414 72 S473 50 516 34 L516 154 L4 154Z" fill="url(#home-signal-fill)"/><path d="M4 127 C70 118 93 132 148 105 S228 93 278 101 S366 70 414 72 S473 50 516 34" fill="none" stroke="#2563eb" strokeWidth="5" strokeLinecap="round"/><circle cx="516" cy="34" r="8" fill="#ffffff" stroke="#2563eb" strokeWidth="5"/></svg>
+            <svg viewBox="0 0 520 154" role="img"><defs><linearGradient id="home-signal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".32"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><polygon points={homeTrend.area} fill="url(#home-signal-fill)"/><polyline points={homeTrend.line} fill="none" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>{latestHomePoint && <circle cx={latestHomePoint.x} cy={latestHomePoint.y} r="8" fill="#ffffff" stroke="#2563eb" strokeWidth="5"/>}</svg>
           </div>
-          <div className="signal-legend"><span>7 Aug</span><span>Today</span></div>
+          <div className="signal-legend"><span>{new Date(homeTrend.entries[0].createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span><span>Today</span></div>
         </article>
 
         <article className="today-card">
@@ -485,6 +511,7 @@ function ViewHeading({ eyebrow, title, copy, action }: { eyebrow: string; title:
 
 function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; onAction: (action: AppAction) => Promise<void>; onMessage: () => void; onNavigate: (view: PatientView) => void }) {
   const [tab, setTab] = useState<"today" | "skin" | "plan" | "travel">("today");
+  const [careStep, setCareStep] = useState(0);
   const [draft, setDraft] = useState({ outputMl:650, consistency:"usual" as const, hydrationMl:1800, skinStatus:"comfortable" as const, pain:1, leak:false, pouchChanged:false, food:"", symptoms:"" });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -500,7 +527,7 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
   const setField = <K extends keyof typeof draft>(field: K, value: (typeof draft)[K]) => setDraft((current) => ({ ...current, [field]:value }));
   const saveLog = async () => {
     setSaving(true); setError(""); setSaved(false);
-    try { await onAction({ type:"save_care_log", log:draft }); setSaved(true); setDraft((current) => ({ ...current, pouchChanged:false, leak:false, food:"", symptoms:"" })); }
+    try { await onAction({ type:"save_care_log", log:draft }); setSaved(true); setCareStep(0); setDraft((current) => ({ ...current, pouchChanged:false, leak:false, food:"", symptoms:"" })); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Care log could not be saved"); }
     finally { setSaving(false); }
   };
@@ -527,19 +554,19 @@ function CareView({ data, onAction, onMessage, onNavigate }: { data: AppData; on
     {tab === "today" && <div className="care-layout">
       <article className="panel care-log-form">
         <div className="panel-heading"><div><span className="eyebrow">Structured daily record</span><h2>Log output, fluids and pouch care</h2></div><span className="status-pill stable">Private</span></div>
+        <nav className="mobile-care-guide" aria-label="Care log steps">
+          <div><span>Step {careStep + 1} of 4</span><strong>{["Output & fluids","Comfort & skin","Notes","Review"][careStep]}</strong></div>
+          <span>{[0,1,2,3].map((step) => <button key={step} className={careStep === step ? "is-active" : careStep > step ? "is-complete" : ""} onClick={() => setCareStep(step)} aria-label={`Go to step ${step + 1}`}>{careStep > step ? <Check size={12}/> : step + 1}</button>)}</span>
+        </nav>
         <div className="care-form-grid">
-          <label>24-hour output amount <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.outputMl} onChange={(event) => setField("outputMl", Number(event.target.value))}/></label>
-          <label>Consistency<select value={draft.consistency} onChange={(event) => setField("consistency", event.target.value as typeof draft.consistency)}><option value="watery">Watery</option><option value="loose">Loose</option><option value="usual">Usual for me</option><option value="firm">Firm</option></select></label>
-          <label>Fluids taken <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.hydrationMl} onChange={(event) => setField("hydrationMl", Number(event.target.value))}/></label>
-          <label>Skin feels<select value={draft.skinStatus} onChange={(event) => setField("skinStatus", event.target.value as typeof draft.skinStatus)}><option value="comfortable">Comfortable</option><option value="itchy">Itchy</option><option value="sore">Sore</option><option value="broken">Broken or weeping</option></select></label>
-          <label className="pain-field">Pain or discomfort <span>{draft.pain}/10</span><input type="range" min="0" max="10" value={draft.pain} onChange={(event) => setField("pain", Number(event.target.value))}/></label>
-          <div className="care-toggles"><button className={draft.pouchChanged ? "is-selected" : ""} onClick={() => setField("pouchChanged",!draft.pouchChanged)}><CheckCircle2 size={18}/> Pouch changed</button><button className={draft.leak ? "is-alert" : ""} onClick={() => setField("leak",!draft.leak)}><Droplets size={18}/> Leak noticed</button></div>
-          <label className="span-two">Meals and drinks<textarea value={draft.food} onChange={(event) => setField("food",event.target.value)} placeholder="What did you eat and drink?" maxLength={500}/></label>
-          <label className="span-two">Symptoms or notes<textarea value={draft.symptoms} onChange={(event) => setField("symptoms",event.target.value)} placeholder="Gas, cramps, medication changes, activity or anything unusual" maxLength={500}/></label>
+          <section className={`care-step-section ${careStep === 0 ? "is-active" : ""}`}><label>24-hour output amount <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.outputMl} onChange={(event) => setField("outputMl", Number(event.target.value))}/></label><label>Consistency<select value={draft.consistency} onChange={(event) => setField("consistency", event.target.value as typeof draft.consistency)}><option value="watery">Watery</option><option value="loose">Loose</option><option value="usual">Usual for me</option><option value="firm">Firm</option></select></label><label>Fluids taken <span>ml</span><input type="number" min="0" max="10000" inputMode="numeric" value={draft.hydrationMl} onChange={(event) => setField("hydrationMl", Number(event.target.value))}/></label></section>
+          <section className={`care-step-section ${careStep === 1 ? "is-active" : ""}`}><label>Skin feels<select value={draft.skinStatus} onChange={(event) => setField("skinStatus", event.target.value as typeof draft.skinStatus)}><option value="comfortable">Comfortable</option><option value="itchy">Itchy</option><option value="sore">Sore</option><option value="broken">Broken or weeping</option></select></label><label className="pain-field">Pain or discomfort <span>{draft.pain}/10</span><input type="range" min="0" max="10" value={draft.pain} onChange={(event) => setField("pain", Number(event.target.value))}/></label><div className="care-toggles"><button className={draft.pouchChanged ? "is-selected" : ""} onClick={() => setField("pouchChanged",!draft.pouchChanged)}><CheckCircle2 size={18}/> Pouch changed</button><button className={draft.leak ? "is-alert" : ""} onClick={() => setField("leak",!draft.leak)}><Droplets size={18}/> Leak noticed</button></div></section>
+          <section className={`care-step-section ${careStep === 2 ? "is-active" : ""}`}><label className="span-two">Meals and drinks<textarea value={draft.food} onChange={(event) => setField("food",event.target.value)} placeholder="What did you eat and drink?" maxLength={500}/></label><label className="span-two">Symptoms or notes<textarea value={draft.symptoms} onChange={(event) => setField("symptoms",event.target.value)} placeholder="Gas, cramps, medication changes, activity or anything unusual" maxLength={500}/></label></section>
+          <section className={`care-step-review ${careStep === 3 ? "is-active" : ""}`}><span><CheckCircle2 size={22}/></span><div><small>Ready to save</small><h3>Take a moment to review</h3><p><strong>{draft.outputMl} ml</strong> output · <strong>{draft.hydrationMl} ml</strong> fluids · skin feels <strong>{draft.skinStatus}</strong> · discomfort <strong>{draft.pain}/10</strong>.</p><p>{draft.leak ? "You noted a leak. " : ""}{draft.pouchChanged ? "You changed your pouch. " : ""}{draft.symptoms || "No additional symptoms or notes."}</p></div></section>
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
         {saved && <p className="form-success"><Check size={16}/> Daily care record saved and added to your diary.</p>}
-        <footer><p><ShieldCheck size={15}/> Tracking supports a care conversation; it does not replace clinical advice.</p><button className="button" disabled={saving} onClick={saveLog}>{saving ? "Saving…" : "Save today’s care log"}<ArrowRight size={17}/></button></footer>
+        <footer><p><ShieldCheck size={15}/> Tracking supports a care conversation; it does not replace clinical advice.</p><button className="button desktop-care-save" disabled={saving} onClick={saveLog}>{saving ? "Saving…" : "Save today’s care log"}<ArrowRight size={17}/></button><div className="mobile-care-actions">{careStep > 0 && <button className="button button--quiet" onClick={() => setCareStep((step) => step - 1)}>Back</button>}{careStep < 3 ? <button className="button" onClick={() => setCareStep((step) => step + 1)}>Continue <ArrowRight size={17}/></button> : <button className="button" disabled={saving} onClick={saveLog}>{saving ? "Saving…" : "Save care log"}<Check size={17}/></button>}</div></footer>
       </article>
       <aside className="care-side-stack">
         <article className="panel care-history"><div className="panel-heading"><div><span className="eyebrow">Recent record</span><h2>Your care timeline</h2></div></div>{data.careLogs.slice(0,4).map((log) => <div key={log.id}><span className={`care-history__dot ${log.leak || log.skinStatus === "sore" || log.skinStatus === "broken" ? "review" : ""}`}/><div><strong>{new Date(log.createdAt).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</strong><p>{log.outputMl} ml · {log.consistency} · {log.hydrationMl} ml fluids</p><small>{log.skinStatus} skin · pain {log.pain}/10{log.pouchChanged ? " · pouch changed" : ""}</small></div></div>)}</article>
@@ -630,6 +657,9 @@ function ProgressView({ data }: { data: AppData }) {
   const latest = data.checkins[0] || fallbackData.checkins[0];
   const dimensions = [["Output",latest.output * 20],["Skin",latest.skin * 20],["Comfort",latest.comfort * 20],["Mood",latest.mood * 20]] as const;
   const uniqueDays = new Set(data.checkins.map((item) => item.createdAt.slice(0,10))).size;
+  const trend = trendGeometry(data.checkins, 600, 210, 10);
+  const latestPoint = trend.points.at(-1);
+  const trendLabel = trend.change > 2 ? "Improving" : trend.change < -2 ? "Changed" : "Steady";
   const exportSummary = () => downloadFile("stoma-alert-progress.csv", `date,output,skin,comfort,mood\n${data.checkins.map((item) => `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood}`).join("\n")}`, "text/csv");
   return <section className="product-view">
     <ViewHeading eyebrow="Outcome tracking" title="Your progress" copy="See patterns in your own check-ins over time. These insights support care conversations and are not a diagnosis." action={<button className="button button--quiet" onClick={exportSummary}><Download size={17} /> Download summary</button>} />
@@ -640,9 +670,9 @@ function ProgressView({ data }: { data: AppData }) {
       <article><span className="summary-icon lilac"><Camera size={21} /></span><div><strong>{data.diaryEntries.filter((entry) => entry.type === "photo").length}</strong><small>Diary photos</small></div></article>
     </div>
     <div className="progress-layout">
-      <article className="panel chart-panel"><div className="panel-heading"><div><span className="eyebrow">Last 10 check-ins</span><h2>Confidence & quality of life</h2></div><span className="trend-pill">↗ Improving</span></div>
-        <div className="chart-wrap"><div className="y-labels"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><svg viewBox="0 0 600 210" role="img" aria-label="Wellbeing trend rising from 58 to 78 percent"><defs><linearGradient id="wellbeing-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".25"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><path d="M10 157 C65 140 90 150 140 130 S220 106 270 119 S350 84 410 94 S500 54 590 46 L590 200 L10 200Z" fill="url(#wellbeing-fill)"/><path d="M10 157 C65 140 90 150 140 130 S220 106 270 119 S350 84 410 94 S500 54 590 46" fill="none" stroke="#2563eb" strokeWidth="5" strokeLinecap="round"/><circle cx="590" cy="46" r="7" fill="#fff" stroke="#2563eb" strokeWidth="5"/></svg></div>
-        <div className="chart-axis"><span>7 Aug</span><span>10 Aug</span><span>13 Aug</span><span>16 Aug</span><span>Today</span></div>
+      <article className="panel chart-panel"><div className="panel-heading"><div><span className="eyebrow">Last {trend.entries.length} check-ins</span><h2>Your wellbeing pattern</h2></div><span className="trend-pill">{trend.change > 2 ? "↗" : trend.change < -2 ? "↘" : "→"} {trendLabel}</span></div>
+        <div className="chart-wrap"><div className="y-labels"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><svg viewBox="0 0 600 210" role="img" aria-label={`Wellbeing ${trendLabel.toLowerCase()} by ${Math.abs(trend.change)} percentage points across ${trend.entries.length} check-ins`}><defs><linearGradient id="wellbeing-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".25"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><polygon points={trend.area} fill="url(#wellbeing-fill)"/><polyline points={trend.line} fill="none" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>{latestPoint && <circle cx={latestPoint.x} cy={latestPoint.y} r="7" fill="#fff" stroke="#2563eb" strokeWidth="5"/>}</svg></div>
+        <div className="chart-axis"><span>{new Date(trend.entries[0].createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span><span>{trend.entries.length} check-ins in view</span><span>Today</span></div>
       </article>
       <article className="panel dimensions-panel"><div className="panel-heading"><div><span className="eyebrow">Your ratings</span><h2>Latest check-in by area</h2></div></div>{dimensions.map(([label,value]) => <div className="dimension-row" key={label}><div><strong>{label}</strong><span>{value >= 80 ? "Good" : value >= 60 ? "Steady" : "Keep in view"}</span></div><div className="bar"><i style={{width:`${value}%`}} /></div><b>{value}%</b></div>)}</article>
     </div>
@@ -843,7 +873,7 @@ export default function StomaAlertApp() {
   const patientContent = view === "home" ? <PatientHome data={data} syncState={syncState} onCheckIn={() => setCheckInOpen(true)} onMessage={() => setMessageOpen(true)} onNavigate={setView} /> : view === "care" ? <CareView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} onNavigate={setView}/> : view === "diary" ? <DiaryView data={data} onCheckIn={() => setCheckInOpen(true)} onUpload={uploadPhoto} onAction={performAction} /> : view === "progress" ? <ProgressView data={data} /> : view === "supplies" ? <SuppliesView data={data} onAction={performAction} onMessage={() => setMessageOpen(true)} /> : view === "learn" ? <LearnView data={data} onAction={performAction} /> : <ProfileView data={data} onAction={performAction} />;
 
   return (
-    <div className="site-shell">
+    <div className={`site-shell role-${role.toLowerCase()}`}>
       <div className="prototype-banner"><span>Prototype</span> Test data only — not for use with real patients</div>
       {notice && <div className="app-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15}/></button></div>}
       <header className="mobile-header"><Brand compact /><div className="mobile-header__actions">{role === "Patient" && <button className="mobile-header__profile" onClick={() => setView("profile")} aria-label="Open your profile"><CircleUserRound size={20}/></button>}<button className="icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Open menu"><Menu size={21} /></button></div></header>
