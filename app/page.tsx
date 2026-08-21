@@ -324,11 +324,11 @@ function CheckInPanel({ heading, onClose, onSave }: { heading: string; onClose: 
             <span className="question-count">Question {step + 1} of {questions.length}</span>
             <h3>{questions[step].title}</h3>
             <p>{questions[step].hint}</p>
-            <div className="score-grid">
+            <div className="score-grid" role="radiogroup" aria-label={questions[step].title}>
               {labels.map((label, index) => {
                 const value = index + 1;
                 return (
-                  <button key={label} className={scores[step] === value ? "is-selected" : ""} onClick={() => setScores((current) => current.map((score, scoreIndex) => scoreIndex === step ? value : score))}>
+                  <button key={label} aria-pressed={scores[step] === value} className={scores[step] === value ? "is-selected" : ""} onClick={() => setScores((current) => current.map((score, scoreIndex) => scoreIndex === step ? value : score))}>
                     <strong>{value}</strong><span>{label}</span>
                   </button>
                 );
@@ -359,81 +359,88 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
   const homeTrend = trendGeometry(data.checkins, 520, 154, 8);
   const latestHomePoint = homeTrend.points.at(-1);
   const recoveryFlow = [
-    { label: "Check-in", detail: `${data.checkins.length} wellbeing updates captured`, meta: data.checkins.length ? formatEntryDate(data.checkins[0].createdAt).day : "Ready", icon: ClipboardCheck },
-    { label: "Diary", detail: `${data.diaryEntries.length} timeline entries securely stored`, meta: `${data.diaryEntries.filter((entry) => entry.type === "photo").length} photos`, icon: Camera },
-    { label: "Care review", detail: `Available to ${data.profile.nurse}`, meta: "In view", icon: Stethoscope },
-    { label: "Progress", detail: "Personal trend updated from your check-ins", meta: `${score}% wellbeing`, icon: LineChart },
+    { label: "Check-in", detail: `${data.checkins.length} daily updates saved`, meta: data.checkins.length ? formatEntryDate(data.checkins[0].createdAt).day : "Ready", icon: ClipboardCheck },
+    { label: "Diary", detail: `${data.diaryEntries.length} notes and photos saved`, meta: `${data.diaryEntries.filter((entry) => entry.type === "photo").length} photos`, icon: Camera },
+    { label: "Care team", detail: `${data.profile.nurse} is available to support you`, meta: "Message", icon: Stethoscope },
+    { label: "Progress", detail: "A simple summary made from your check-in answers", meta: `${score}% average`, icon: LineChart },
   ];
   const activeSignal = recoveryFlow[activeStage];
   const ActiveSignalIcon = activeSignal.icon;
   const mobileVitals = [
-    { label:"Output", value:latest.output, icon:Droplets, copy:"Within range" },
-    { label:"Skin", value:latest.skin, icon:Sparkles, copy:"Looking steady" },
-    { label:"Comfort", value:latest.comfort, icon:HeartPulse, copy:"Improving" },
-    { label:"Mood", value:latest.mood, icon:CloudSun, copy:"Feeling positive" },
+    { label:"Output", value:latest.output, icon:Droplets, copy:latest.output >= 4 ? "Going well" : latest.output === 3 ? "About usual" : "Worth noting" },
+    { label:"Skin", value:latest.skin, icon:Sparkles, copy:latest.skin >= 4 ? "Going well" : latest.skin === 3 ? "About usual" : "Worth noting" },
+    { label:"Comfort", value:latest.comfort, icon:HeartPulse, copy:latest.comfort >= 4 ? "Going well" : latest.comfort === 3 ? "About usual" : "Worth noting" },
+    { label:"Mood", value:latest.mood, icon:CloudSun, copy:latest.mood >= 4 ? "Going well" : latest.mood === 3 ? "About usual" : "Worth noting" },
   ];
+  const trendSummary = homeTrend.change > 2
+    ? `Your average has risen by ${homeTrend.change} points across the check-ins shown.`
+    : homeTrend.change < -2
+      ? `Your average has fallen by ${Math.abs(homeTrend.change)} points across the check-ins shown.`
+      : "Your recent check-in average has stayed about the same.";
 
   return (
     <section className="award-home">
       <div className="mobile-patient-home">
         <header className="mobile-welcome-row">
-          <div><span>Good evening</span><h1>{data.profile.firstName}</h1></div>
-          <button onClick={() => onNavigate("profile")} aria-label="Open your profile">{data.profile.firstName.slice(0,1)}D</button>
+          <div><span>Welcome back</span><h1>{data.profile.firstName}</h1></div>
+          <button onClick={() => onNavigate("profile")} aria-label="Open your profile">{data.profile.firstName.slice(0,1)}</button>
         </header>
 
         <section className="mobile-status-card">
-          <header><span><i/> Your check-in is ready</span><small className={`sync-state sync-state--${syncState}`}>{syncState === "saving" ? "Saving…" : syncState === "loading" ? "Connecting…" : "Up to date"}</small></header>
+          <header><span><i/> Today’s check-in</span><small className={`sync-state sync-state--${syncState}`}>{syncState === "saving" ? "Saving…" : syncState === "loading" ? "Loading…" : "Saved"}</small></header>
           <div className="mobile-status-card__body">
-            <div><span className="mobile-overline">60-second check-in</span><h2>{data.profile.checkinHeading}</h2><p>{data.profile.homeSubtitle}</p></div>
-            <ProgressRing value={score}/>
+            <div><h2>{data.profile.checkinHeading}</h2><p>{data.profile.homeSubtitle}</p></div>
+            <div className="mobile-score-summary"><ProgressRing value={score}/><span>Your latest average</span></div>
           </div>
+          <p className="mobile-score-explanation">This average comes from your four latest answers. It is not a medical score.</p>
           <button onClick={onCheckIn}>Start today’s check-in <ArrowRight size={19}/></button>
         </section>
 
-        <section className="mobile-vitals" aria-label="Latest wellbeing ratings">
-          {mobileVitals.map(({label,value,icon:Icon,copy}) => <article key={label}><span><Icon size={18}/></span><div><small>{label}</small><strong>{value}/5</strong><p>{copy}</p></div></article>)}
+        <div className="mobile-section-title mobile-section-title--primary"><div><h2>Your main actions</h2><p>Choose what you need today.</p></div></div>
+        <section className="mobile-primary-actions" aria-label="Main actions">
+          <button onClick={() => onNavigate("care")}><span><HeartPulse size={25}/></span><div><strong>Record today’s care</strong><small>Output, drinks, skin and comfort</small></div><ChevronRight size={22}/></button>
+          <button onClick={onMessage}><span><MessageCircle size={25}/></span><div><strong>Contact {data.profile.nurse.split(" ")[0]}</strong><small>Send a message to your stoma nurse</small></div><ChevronRight size={22}/></button>
+        </section>
+
+        <div className="mobile-section-title"><div><h2>Your latest check-in</h2><p>Each answer is out of five.</p></div></div>
+        <section className="mobile-vitals" aria-label="Latest check-in answers">
+          {mobileVitals.map(({label,value,icon:Icon,copy}) => <article key={label}><span><Icon size={20}/></span><div><small>{label}</small><strong>{value} out of 5</strong><p>{copy}</p></div></article>)}
         </section>
 
         <section className="mobile-pattern-card">
-          <div><span>Your recent pattern</span><strong>{homeTrend.change >= 0 ? "You’re moving forward" : "A change worth noticing"}</strong><p>{homeTrend.change >= 0 ? "Your check-ins are building a useful picture of recovery." : "Keep checking in and share anything concerning with your care team."}</p></div>
+          <div><span>Your recent pattern</span><strong>{homeTrend.change > 2 ? "Your answers are improving" : homeTrend.change < -2 ? "Your answers have changed" : "Your answers are steady"}</strong><p>{trendSummary}</p><small>Use this as a conversation aid. It does not diagnose a problem.</small></div>
           <svg viewBox="0 0 180 74" role="img" aria-label={`Wellbeing changed by ${homeTrend.change} percentage points`}><polyline points={trendGeometry(data.checkins, 180, 74, 6).line} fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <button onClick={() => onNavigate("progress")}>View full progress <ArrowRight size={18}/></button>
         </section>
 
-        <div className="mobile-section-title"><div><span>Your day</span><h2>What would you like to do?</h2></div><button onClick={() => onNavigate("progress")}>Progress <ArrowUpRight size={15}/></button></div>
-        <section className="mobile-action-grid">
-          <button onClick={() => onNavigate("care")}><span><HeartPulse size={21}/></span><div><strong>Open daily care centre</strong><small>Output, hydration, skin and plan</small></div><ChevronRight size={18}/></button>
-          <button onClick={() => onNavigate("diary")}><span><Camera size={21}/></span><div><strong>Add diary photo</strong><small>Keep a visual record</small></div><ChevronRight size={18}/></button>
-          <button onClick={() => onNavigate("supplies")}><span><PackageCheck size={21}/></span><div><strong>Manage supplies</strong><small>About four days left</small></div><ChevronRight size={18}/></button>
-          <button onClick={onMessage}><span><MessageCircle size={21}/></span><div><strong>Message your nurse</strong><small>Usually replies in one day</small></div><ChevronRight size={18}/></button>
-        </section>
-
-        <section className="mobile-nurse-card">
-          <div className="nurse-avatar nurse-avatar--large">SW<span/></div>
-          <div><small>Your stoma care nurse</small><strong>{data.profile.nurse}</strong><p><i/> Available to support you</p></div>
-          <button onClick={onMessage} aria-label={`Message ${data.profile.nurse}`}><ArrowUpRight size={18}/></button>
+        <div className="mobile-section-title"><div><h2>More tools</h2></div></div>
+        <section className="mobile-more-tools">
+          <button onClick={() => onNavigate("diary")}><Camera size={22}/><span>Diary</span></button>
+          <button onClick={() => onNavigate("supplies")}><PackageCheck size={22}/><span>Supplies</span></button>
+          <button onClick={() => onNavigate("learn")}><BookOpen size={22}/><span>Guides</span></button>
         </section>
       </div>
 
       <div className="desktop-patient-home">
       <header className="award-greeting">
-        <div><span className="eyebrow">Patient workspace · {workspaceDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span><p>Good evening, {data.profile.firstName}</p></div>
+        <div><span className="eyebrow">Your home · {workspaceDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span><p>Welcome back, {data.profile.firstName}</p></div>
         <div className="award-greeting__right"><span className={`sync-state sync-state--${syncState}`}><ShieldCheck size={16} /> {syncState === "saving" ? "Saving changes…" : syncState === "error" ? "Using demo data" : syncState === "loading" ? "Connecting…" : "All changes saved"}</span><button className="profile-button" onClick={() => onNavigate("profile")} aria-label="Open your profile">{data.profile.firstName.slice(0,1)}D</button></div>
       </header>
 
       <section className="award-hero">
         <div className="award-hero__copy">
           <span className="calm-status"><i /> Your check-in is ready</span>
-          <h1>Recovery,<br/><em>clearly connected.</em></h1>
+          <h1>Your care,<br/><em>clearly together.</em></h1>
           <p>{data.profile.homeSubtitle}</p>
           <div className="award-hero__actions">
             <button className="button button--coral" onClick={onCheckIn}>Start today’s check-in <ArrowUpRight size={18} /></button>
             <button className="text-link" onClick={() => onNavigate("progress")}>See your progress <ArrowRight size={16} /></button>
           </div>
-          <div className="trust-line"><ShieldCheck size={15}/><span>Private by design</span><i/><span>Non-diagnostic</span><i/><span>You control what is shared</span></div>
+          <div className="trust-line"><ShieldCheck size={15}/><span>Private</span><i/><span>Not a diagnosis</span><i/><span>You control what is shared</span></div>
         </div>
 
-        <div className="recovery-console" aria-label="Interactive recovery flow">
-          <header className="console-head"><div><span>YOUR RECOVERY JOURNEY</span><small>PRIVATE PATIENT WORKSPACE</small></div><b><i/> CONNECTED</b></header>
+        <div className="recovery-console" aria-label="Your recovery journey">
+          <header className="console-head"><div><span>Your recovery journey</span><small>Your private record</small></div><b><i/> Up to date</b></header>
           <div className="console-flow" role="tablist" aria-label="Recovery stages">
             {recoveryFlow.map((stage, index) => {
               const StageIcon = stage.icon;
@@ -442,13 +449,13 @@ function PatientHome({ data, syncState, onCheckIn, onMessage, onNavigate }: { da
           </div>
           <div className="console-detail">
             <div className="console-detail__icon"><ActiveSignalIcon size={26}/><span/></div>
-            <div><small>SELECTED SIGNAL · 0{activeStage + 1}</small><h3>{activeSignal.label}</h3><p>{activeSignal.detail}</p></div>
+            <div><small>Step 0{activeStage + 1}</small><h3>{activeSignal.label}</h3><p>{activeSignal.detail}</p></div>
             <strong>{activeSignal.meta}<CheckCircle2 size={16}/></strong>
           </div>
           <div className="console-metrics">
-            <div><span>WELLBEING</span><strong>{score}%</strong><small><TrendingUp size={13}/> Latest check-in</small></div>
-            <div><span>JOURNEY</span><strong>Day {journeyDay}</strong><small><Activity size={13}/> Consistent rhythm</small></div>
-            <div><span>NEXT ACTION</span><strong>Check in</strong><small><Clock3 size={13}/> About 60 seconds</small></div>
+            <div><span>Latest average</span><strong>{score}%</strong><small><TrendingUp size={13}/> From four answers</small></div>
+            <div><span>Your journey</span><strong>Day {journeyDay}</strong><small><Activity size={13}/> Since your stoma was created</small></div>
+            <div><span>Next step</span><strong>Check in</strong><small><Clock3 size={13}/> About 60 seconds</small></div>
           </div>
         </div>
 
@@ -660,21 +667,27 @@ function ProgressView({ data }: { data: AppData }) {
   const trend = trendGeometry(data.checkins, 600, 210, 10);
   const latestPoint = trend.points.at(-1);
   const trendLabel = trend.change > 2 ? "Improving" : trend.change < -2 ? "Changed" : "Steady";
+  const trendExplanation = trend.change > 2
+    ? `Your average check-in score has risen by ${trend.change} points from the first check-in shown to the latest one.`
+    : trend.change < -2
+      ? `Your average check-in score has fallen by ${Math.abs(trend.change)} points from the first check-in shown to the latest one.`
+      : "Your average check-in score has stayed about the same across the check-ins shown.";
   const exportSummary = () => downloadFile("stoma-alert-progress.csv", `date,output,skin,comfort,mood\n${data.checkins.map((item) => `${item.createdAt},${item.output},${item.skin},${item.comfort},${item.mood}`).join("\n")}`, "text/csv");
   return <section className="product-view">
     <ViewHeading eyebrow="Outcome tracking" title="Your progress" copy="See patterns in your own check-ins over time. These insights support care conversations and are not a diagnosis." action={<button className="button button--quiet" onClick={exportSummary}><Download size={17} /> Download summary</button>} />
     <div className="progress-summary">
-      <article className="score-card"><ProgressRing value={score} /><div><span className="eyebrow">Wellbeing index</span><strong>{score >= 75 ? "Moving forward" : "Keep checking in"}</strong><p>Based on your latest four ratings</p></div></article>
+      <article className="score-card"><ProgressRing value={score} /><div><span className="eyebrow">Your latest average</span><strong>{score >= 75 ? "Your latest answers are positive" : "Keep recording how you feel"}</strong><p>This is the average of your four latest answers, not a medical score.</p></div></article>
       <article><span className="summary-icon mint"><ClipboardCheck size={21} /></span><div><strong>{data.checkins.length}</strong><small>Total check-ins</small></div></article>
       <article><span className="summary-icon peach"><CalendarDays size={21} /></span><div><strong>{uniqueDays}</strong><small>Days tracked</small></div></article>
       <article><span className="summary-icon lilac"><Camera size={21} /></span><div><strong>{data.diaryEntries.filter((entry) => entry.type === "photo").length}</strong><small>Diary photos</small></div></article>
     </div>
     <div className="progress-layout">
       <article className="panel chart-panel"><div className="panel-heading"><div><span className="eyebrow">Last {trend.entries.length} check-ins</span><h2>Your wellbeing pattern</h2></div><span className="trend-pill">{trend.change > 2 ? "↗" : trend.change < -2 ? "↘" : "→"} {trendLabel}</span></div>
+        <p className="chart-explanation"><strong>{trendExplanation}</strong> The line is a visual summary of your answers and does not diagnose a health problem.</p>
         <div className="chart-wrap"><div className="y-labels"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><svg viewBox="0 0 600 210" role="img" aria-label={`Wellbeing ${trendLabel.toLowerCase()} by ${Math.abs(trend.change)} percentage points across ${trend.entries.length} check-ins`}><defs><linearGradient id="wellbeing-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".25"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><polygon points={trend.area} fill="url(#wellbeing-fill)"/><polyline points={trend.line} fill="none" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>{latestPoint && <circle cx={latestPoint.x} cy={latestPoint.y} r="7" fill="#fff" stroke="#2563eb" strokeWidth="5"/>}</svg></div>
         <div className="chart-axis"><span>{new Date(trend.entries[0].createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span><span>{trend.entries.length} check-ins in view</span><span>Today</span></div>
       </article>
-      <article className="panel dimensions-panel"><div className="panel-heading"><div><span className="eyebrow">Your ratings</span><h2>Latest check-in by area</h2></div></div>{dimensions.map(([label,value]) => <div className="dimension-row" key={label}><div><strong>{label}</strong><span>{value >= 80 ? "Good" : value >= 60 ? "Steady" : "Keep in view"}</span></div><div className="bar"><i style={{width:`${value}%`}} /></div><b>{value}%</b></div>)}</article>
+      <article className="panel dimensions-panel"><div className="panel-heading"><div><span className="eyebrow">Your latest answers</span><h2>Each area is scored out of five</h2></div></div>{dimensions.map(([label,value]) => <div className="dimension-row" key={label}><div><strong>{label}</strong><span>{value >= 80 ? "Going well" : value >= 60 ? "About usual" : "Worth noting"}</span></div><div className="bar" aria-hidden="true"><i style={{width:`${value}%`}} /></div><b>{value / 20}/5</b></div>)}</article>
     </div>
     <article className="streak-card"><span className="streak-icon"><Sparkles size={26} /></span><div><span className="eyebrow">Check-in consistency</span><h3>{Math.min(7, uniqueDays)} active days recorded</h3><p>Small, regular updates give your care team the clearest view of recovery.</p></div><div className="week-dots">{["M","T","W","T","F","S","S"].map((day,index) => <span key={`${day}-${index}`}><i>{index < Math.min(7, uniqueDays) && <Check size={13} />}</i>{day}</span>)}</div></article>
   </section>;
@@ -874,7 +887,7 @@ export default function StomaAlertApp() {
 
   return (
     <div className={`site-shell role-${role.toLowerCase()}`}>
-      <div className="prototype-banner"><span>Prototype</span> Test data only — not for use with real patients</div>
+      <div className="prototype-banner"><span>Demo only</span> No real patient information</div>
       {notice && <div className="app-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15}/></button></div>}
       <header className="mobile-header"><Brand compact /><div className="mobile-header__actions">{role === "Patient" && <button className="mobile-header__profile" onClick={() => setView("profile")} aria-label="Open your profile"><CircleUserRound size={20}/></button>}<button className="icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Open menu"><Menu size={21} /></button></div></header>
       <aside className={`sidebar ${menuOpen ? "is-open" : ""}`}>
