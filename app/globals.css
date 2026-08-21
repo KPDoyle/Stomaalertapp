@@ -1357,3 +1357,392 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .mobile-care-guide { align-items:flex-start; flex-direction:column; }
   .mobile-care-guide > span { width:100%; justify-content:space-between; }
 }
+
+/* 55–80 core persona: large type, plain language and resilient zoom */
+.role-patient {
+  --muted:#405a77;
+  overflow-x:clip;
+  color:#0b2442;
+  font-size:16px;
+  line-height:1.55;
+}
+.role-patient .prototype-banner {
+  height:42px;
+  gap:7px;
+  padding:0 16px;
+  color:#624100;
+  border-color:#e2ca83;
+  background:#fff4c7;
+  font-size:14px;
+  line-height:1.2;
+}
+.role-patient .prototype-banner span {
+  color:#503500;
+  font-size:14px;
+  letter-spacing:.02em;
+  text-transform:none;
+}
+.role-patient .sidebar { top:54px; bottom:12px; width:272px; }
+.role-patient .app-content { min-width:0; margin-left:296px; padding-top:88px; }
+.role-patient p,
+.role-patient label,
+.role-patient input,
+.role-patient select,
+.role-patient textarea,
+.role-patient button,
+.role-patient a { font-size:16px; line-height:1.5; }
+.role-patient small,
+.role-patient .eyebrow,
+.role-patient .status-pill,
+.role-patient .nav-label,
+.role-patient .question-count { font-size:14px; line-height:1.45; }
+.role-patient .eyebrow,
+.role-patient .nav-label,
+.role-patient .question-count {
+  letter-spacing:.02em;
+  text-transform:none;
+}
+.role-patient strong,
+.role-patient b { font-size:16px; }
+.role-patient h1 { font-size:clamp(34px,4vw,52px); line-height:1.08; }
+.role-patient h2 { font-size:clamp(25px,2.5vw,34px); line-height:1.16; }
+.role-patient h3 { font-size:20px; line-height:1.3; }
+.role-patient .button,
+.role-patient button,
+.role-patient a {
+  min-height:48px;
+}
+.role-patient .icon-button,
+.role-patient .profile-button,
+.role-patient .row-remove,
+.role-patient .inventory-remove {
+  width:48px;
+  min-width:48px;
+  height:48px;
+  min-height:48px;
+}
+.role-patient input,
+.role-patient select,
+.role-patient textarea {
+  min-height:52px;
+  color:#102f50;
+  border-color:#9db1c8;
+  background:#fff;
+}
+.role-patient textarea { min-height:112px; }
+.role-patient .panel,
+.role-patient .guide-card,
+.role-patient .score-card { border-color:#c3d1e1; }
+.role-patient .view-heading p,
+.role-patient .panel p,
+.role-patient .timeline-entry p,
+.role-patient .inventory-card > p,
+.role-patient .guide-reader p { color:#405a77; }
+.role-patient .form-error,
+.role-patient .form-success,
+.role-patient .app-notice { font-size:16px; }
+.role-patient .message span,
+.role-patient .timeline-entry > div > span,
+.role-patient .calendar-days span,
+.role-patient .calendar-key span,
+.role-patient .care-form-grid label > span,
+.role-patient .travel-checklist span,
+.role-patient .week-dots span,
+.role-patient .score-grid span,
+.role-patient .guide-reader > section > i { font-size:14px; line-height:1.4; }
+.role-patient .stepper-control button { min-width:48px; }
+.role-patient .brand-name { font-size:16px; }
+.role-patient .role-card,
+.role-patient .sidebar nav button { min-height:52px; }
+.role-patient .role-card small,
+.role-patient .role-card strong,
+.role-patient .sidebar__support strong,
+.role-patient .sidebar__support p,
+.role-patient .sidebar__footnote { font-size:14px; }
+
+/* Desktop patient home: remove technical microcopy and keep every label readable. */
+.role-patient .award-greeting__right > span,
+.role-patient .calm-status,
+.role-patient .award-hero__copy > p,
+.role-patient .text-link,
+.role-patient .trust-line,
+.role-patient .console-head span,
+.role-patient .console-head small,
+.role-patient .console-head b,
+.role-patient .console-flow button > b,
+.role-patient .console-flow button small,
+.role-patient .console-detail small,
+.role-patient .console-detail p,
+.role-patient .console-detail > strong,
+.role-patient .console-metrics span,
+.role-patient .console-metrics small,
+.role-patient .hero-signal-strip small,
+.role-patient .hero-signal-strip strong,
+.role-patient .hero-signal-strip b,
+.role-patient .snapshot-list small,
+.role-patient .quick-list small,
+.role-patient .nurse-card-premium p { font-size:14px; line-height:1.45; }
+.role-patient .console-flow button > b,
+.role-patient .console-head small,
+.role-patient .console-metrics span,
+.role-patient .hero-signal-strip small {
+  overflow:visible;
+  letter-spacing:.02em;
+  text-overflow:clip;
+  text-transform:none;
+  white-space:normal;
+}
+.role-patient .recovery-console { min-width:0; }
+.role-patient .console-head { align-items:flex-start; flex-wrap:wrap; gap:12px; }
+.role-patient .console-flow button { min-width:0; }
+.role-patient .console-detail { grid-template-columns:58px minmax(0,1fr); }
+.role-patient .console-detail > strong { grid-column:2; justify-self:start; }
+.role-patient .console-metrics { align-items:stretch; }
+.role-patient .console-metrics > div { min-width:0; }
+.role-patient .hero-signal-strip > div { min-width:0; }
+.role-patient .snapshot-list button,
+.role-patient .quick-list button,
+.role-patient .nurse-card-premium button,
+.role-patient .home-section-head button { font-size:16px; }
+
+/* Progress is always explained in words as well as shown visually. */
+.chart-explanation {
+  margin:4px 0 22px;
+  padding:16px 18px;
+  border-left:5px solid #2563eb;
+  border-radius:10px;
+  color:#294765 !important;
+  background:#edf4ff;
+  font-size:16px !important;
+  line-height:1.6 !important;
+}
+.chart-explanation strong { display:block; margin-bottom:4px; color:#12385f; }
+.role-patient .chart-axis,
+.role-patient .y-labels,
+.role-patient .dimension-row strong,
+.role-patient .dimension-row span,
+.role-patient .dimension-row b { color:#314e6c; font-size:14px; }
+.role-patient .dimension-row { gap:12px; }
+.role-patient .dimension-row .bar { min-width:80px; }
+
+@media (max-width:1100px) {
+  .role-patient .prototype-banner { justify-content:center; }
+  .role-patient .mobile-header {
+    top:42px;
+    height:72px;
+  }
+  .role-patient .mobile-header__profile,
+  .role-patient .mobile-header .icon-button { width:48px; height:48px; }
+  .role-patient .sidebar { top:0; bottom:0; width:min(360px,92vw); }
+  .role-patient .app-content {
+    width:100%;
+    max-width:960px;
+    margin:0 auto;
+    padding:134px 20px 132px;
+  }
+  .role-patient .view-heading { align-items:flex-start; flex-direction:column; }
+  .role-patient .view-heading h1 { font-size:38px; }
+  .role-patient .view-heading p { max-width:720px; font-size:17px; line-height:1.6; }
+  .role-patient .view-heading .button { width:100%; }
+  .role-patient .panel-heading { align-items:flex-start; flex-wrap:wrap; gap:12px; }
+  .role-patient .panel-heading h2 { font-size:25px; }
+  .role-patient .panel-heading small { color:#405a77; }
+
+  .mobile-welcome-row span { color:#405a77; font-size:16px; }
+  .mobile-welcome-row h1 { font-size:36px; }
+  .mobile-welcome-row > button { width:52px; height:52px; min-height:52px; font-size:18px; }
+  .mobile-status-card { padding:24px; }
+  .mobile-status-card > header { align-items:flex-start; flex-wrap:wrap; }
+  .mobile-status-card > header span,
+  .mobile-status-card > header small { color:#e4f1ff; font-size:14px; }
+  .mobile-status-card__body { grid-template-columns:minmax(0,1fr) 92px; gap:18px; margin:28px 0 16px; }
+  .mobile-status-card h2 { max-width:560px; margin-top:0; font-size:34px; line-height:1.12; }
+  .mobile-status-card__body p { color:#e1efff; font-size:17px; line-height:1.55; }
+  .mobile-score-summary { display:flex; align-items:center; flex-direction:column; gap:8px; text-align:center; }
+  .mobile-score-summary .progress-ring { width:88px; height:88px; }
+  .mobile-score-summary .progress-ring strong { font-size:18px; }
+  .mobile-score-summary > span { color:#e4f1ff; font-size:14px; line-height:1.3; }
+  .mobile-score-explanation { position:relative; z-index:1; margin:0 0 18px; padding:12px 14px; border-radius:12px; color:#e4f1ff !important; background:rgba(255,255,255,.1); font-size:14px !important; }
+  .mobile-status-card > button { min-height:58px; font-size:18px; }
+
+  .mobile-section-title { align-items:flex-start; margin:30px 2px 14px; }
+  .mobile-section-title h2 { font-size:26px; }
+  .mobile-section-title p { margin:5px 0 0; color:#405a77; font-size:16px; }
+  .mobile-section-title--primary { margin-top:30px; }
+  .mobile-primary-actions { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .mobile-primary-actions > button {
+    min-height:104px;
+    display:grid;
+    grid-template-columns:58px minmax(0,1fr) 26px;
+    align-items:center;
+    gap:14px;
+    padding:18px;
+    border:2px solid #c5d5e7;
+    border-radius:20px;
+    color:#112f50;
+    background:#fff;
+    box-shadow:0 16px 38px -32px rgba(10,43,82,.72);
+    text-align:left;
+  }
+  .mobile-primary-actions > button > span { width:58px; height:58px; display:grid; place-items:center; border-radius:17px; color:#fff; background:#2563eb; }
+  .mobile-primary-actions > button > div { display:flex; min-width:0; flex-direction:column; gap:5px; }
+  .mobile-primary-actions strong { color:#102f50; font-size:19px; }
+  .mobile-primary-actions small { color:#405a77; font-size:15px; }
+  .mobile-primary-actions > button > svg { color:#466783; }
+
+  .mobile-vitals { grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:0 0 30px; }
+  .mobile-vitals article { grid-template-columns:46px minmax(0,1fr); min-height:104px; padding:16px; }
+  .mobile-vitals article > span { width:46px; height:46px; }
+  .mobile-vitals article > div { display:flex; align-items:flex-start; flex-direction:column; gap:3px; }
+  .mobile-vitals small { color:#405a77; font-size:14px; }
+  .mobile-vitals strong { color:#164ea8; font-size:17px; line-height:1.3; }
+  .mobile-vitals p { overflow:visible; color:#405a77; font-size:14px; white-space:normal; }
+
+  .mobile-pattern-card { grid-template-columns:minmax(0,1fr) minmax(160px,240px); margin:0 0 30px; padding:22px; }
+  .mobile-pattern-card span { font-size:14px; letter-spacing:.02em; text-transform:none; }
+  .mobile-pattern-card strong { font-size:22px; }
+  .mobile-pattern-card p,
+  .mobile-pattern-card small { display:block; color:#405a77; font-size:16px; line-height:1.55; }
+  .mobile-pattern-card small { margin-top:8px; font-size:14px; }
+  .mobile-pattern-card > button { grid-column:1/-1; justify-self:start; min-height:48px; display:flex; align-items:center; gap:8px; padding:0 18px; border:1px solid #8bacdf; border-radius:12px; color:#174fab; background:#fff; font-size:16px; font-weight:800; }
+
+  .mobile-more-tools { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .mobile-more-tools button { min-height:86px; display:flex; align-items:center; justify-content:center; gap:10px; flex-direction:column; border:1px solid #bdcede; border-radius:18px; color:#174fab; background:#fff; font-size:16px; font-weight:800; }
+  .mobile-more-tools button span { font-size:16px; }
+
+  .mobile-nav { height:94px; padding-top:10px; }
+  .mobile-nav button { min-height:64px; font-size:14px; line-height:1.2; }
+  .mobile-nav__checkin i { width:56px; height:56px; margin-top:-31px; }
+  .mobile-nav__checkin span { font-size:14px; }
+
+  .role-patient .care-command-strip { grid-template-columns:repeat(2,1fr); }
+  .role-patient .care-command-strip article { min-height:94px; }
+  .role-patient .care-command-strip small,
+  .role-patient .care-command-strip p,
+  .role-patient .care-history small,
+  .role-patient .care-reference p,
+  .role-patient .care-reference a,
+  .role-patient .task-item p,
+  .role-patient .task-item small,
+  .role-patient .travel-checklist small,
+  .role-patient .inventory-list small,
+  .role-patient .request-history small,
+  .role-patient .timeline-entry small,
+  .role-patient .timeline-entry > div > span,
+  .role-patient .guide-reader footer p { color:#405a77; font-size:14px; line-height:1.5; }
+  .role-patient .care-command-strip strong,
+  .role-patient .care-history strong,
+  .role-patient .task-item strong,
+  .role-patient .travel-checklist strong,
+  .role-patient .inventory-list strong,
+  .role-patient .timeline-entry strong { font-size:17px; }
+  .role-patient .care-tabs { top:122px; }
+  .role-patient .care-tabs button { min-height:52px; font-size:15px; }
+  .role-patient .care-form-grid label,
+  .role-patient .diary-note-form label,
+  .role-patient .add-item-form label,
+  .role-patient .add-product-form label,
+  .role-patient .form-panel label,
+  .role-patient .products-panel label,
+  .role-patient .supplier-card label { color:#294765; font-size:16px; }
+  .role-patient .care-form-grid input:not([type="range"]),
+  .role-patient .care-form-grid select,
+  .role-patient .care-form-grid textarea,
+  .role-patient .diary-note-form input,
+  .role-patient .diary-note-form textarea,
+  .role-patient .add-item-form input,
+  .role-patient .add-item-form textarea,
+  .role-patient .add-item-form select,
+  .role-patient .add-product-form input,
+  .role-patient .form-grid input,
+  .role-patient .form-grid select,
+  .role-patient .patient-composer textarea { min-height:54px; font-size:17px; }
+  .role-patient .care-form-grid textarea,
+  .role-patient .diary-note-form textarea,
+  .role-patient .add-item-form textarea,
+  .role-patient .patient-composer textarea { min-height:120px; }
+  .role-patient .care-form-grid label > span,
+  .role-patient .care-form-grid .pain-field > span { font-size:14px; }
+  .role-patient .care-toggles button,
+  .role-patient .filter-pills button,
+  .role-patient .guide-actions button,
+  .role-patient .product-checks button,
+  .role-patient .calendar-clear,
+  .role-patient .small-action,
+  .role-patient .file-picker { min-height:48px; font-size:15px; }
+  .role-patient .timeline-entry { grid-template-columns:48px minmax(0,1fr); }
+  .role-patient .timeline-entry > :last-child { grid-column:2; }
+  .role-patient .timeline-icon { width:48px; height:48px; }
+  .role-patient .calendar-grid button { min-height:46px; font-size:16px; }
+  .role-patient .mini-stats { grid-template-columns:1fr; }
+  .role-patient .mini-stats > div { min-height:72px; grid-template-columns:48px auto 1fr; padding:14px 16px; }
+  .role-patient .mini-stats strong { font-size:22px; }
+  .role-patient .mini-stats small { font-size:15px; }
+  .role-patient .guide-actions button,
+  .role-patient .guide-reader__intro,
+  .role-patient .guide-reader section p,
+  .role-patient .guide-reader h3 { font-size:16px; }
+  .role-patient .guide-reader > section > i { width:44px; height:44px; font-size:14px; }
+  .role-patient .stepper-control button { width:48px; height:48px; }
+  .role-patient .stepper-control b { min-width:42px; font-size:17px; }
+  .role-patient .inventory-remove,
+  .role-patient .row-remove { width:48px; height:48px; }
+
+  .role-patient .checkin-main { padding:28px 24px; }
+  .role-patient .sheet-header h2 { font-size:30px; }
+  .role-patient .question-card > p { font-size:16px; }
+  .role-patient .score-grid button { min-height:96px; }
+  .role-patient .score-grid strong { font-size:26px; }
+  .role-patient .score-grid span { font-size:15px; }
+  .role-patient .message p { font-size:16px; }
+  .role-patient .message span { font-size:14px; }
+}
+
+@media (max-width:600px) {
+  .role-patient .app-content { padding-right:14px; padding-left:14px; }
+  .role-patient .prototype-banner { font-size:13px; }
+  .role-patient .prototype-banner span { font-size:13px; }
+  .mobile-status-card { padding:20px; }
+  .mobile-status-card__body { grid-template-columns:1fr; }
+  .mobile-score-summary { align-items:flex-start; flex-direction:row; }
+  .mobile-score-summary > span { max-width:90px; text-align:left; }
+  .mobile-primary-actions,
+  .mobile-vitals,
+  .mobile-pattern-card { grid-template-columns:1fr; }
+  .mobile-primary-actions > button { min-height:104px; }
+  .mobile-pattern-card > button { grid-column:auto; width:100%; justify-content:center; }
+  .mobile-more-tools { gap:8px; }
+  .mobile-more-tools button { min-height:82px; padding:8px 4px; }
+  .role-patient .care-command-strip { grid-template-columns:1fr; }
+  .role-patient .care-tabs { position:static; grid-template-columns:1fr 1fr; overflow:visible; }
+  .role-patient .care-tabs button { min-width:0; }
+  .role-patient .score-grid { grid-template-columns:1fr; }
+  .role-patient .score-grid button { min-height:58px; flex-direction:row; justify-content:flex-start; gap:18px; padding:10px 18px; }
+  .role-patient .score-grid strong { min-width:34px; }
+  .role-patient .score-grid span { text-align:left; }
+  .role-patient .sheet-footer { align-items:stretch; flex-direction:column-reverse; }
+  .role-patient .sheet-footer .button { width:100%; }
+  .role-patient .mobile-care-guide { align-items:stretch; }
+  .role-patient .mobile-care-guide > span { display:grid; grid-template-columns:repeat(4,48px); justify-content:space-between; }
+  .role-patient .care-step-review.is-active { grid-template-columns:1fr; }
+  .role-patient .inventory-list > div { grid-template-columns:48px minmax(0,1fr) 48px; }
+  .role-patient .inventory-list > div > i { grid-column:2/4; }
+  .role-patient .stepper-control { grid-column:2/4; grid-row:auto; }
+  .role-patient .inventory-remove { grid-column:3; grid-row:1; }
+  .role-patient .chart-wrap { overflow-x:auto; }
+  .role-patient .chart-wrap svg { min-width:520px; }
+  .role-patient .chart-axis { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .role-patient .chart-axis span:nth-child(2) { grid-column:1/-1; grid-row:2; }
+}
+
+@media (min-width:1101px) {
+  .role-patient .award-hero { min-height:690px; }
+  .role-patient .award-hero h1 { font-size:clamp(50px,4.7vw,70px); }
+  .role-patient .award-hero__copy > p { font-size:17px; }
+  .role-patient .recovery-console { padding-bottom:16px; }
+  .role-patient .home-bento { align-items:stretch; }
+  .role-patient .journey-card,
+  .role-patient .today-card,
+  .role-patient .nurse-card-premium,
+  .role-patient .quick-card { padding:28px; }
+}
